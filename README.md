@@ -648,6 +648,12 @@ docker run -it --privileged \
     docker.io/acudovs/powergslb:"$NEW_VERSION"
 ```
 
+The service logs its version as the first line it writes at startup, so the journal confirms which version is serving:
+
+```shell
+docker exec powergslb journalctl -u powergslb | grep PowerGSLB
+```
+
 ---
 
 ## Building the Docker image
@@ -691,10 +697,12 @@ Install the built wheel:
 pip install --force-reinstall --upgrade dist/powergslb-*-py3-none-any.whl
 ```
 
-Run the service against a configuration file (`-c` / `--config` is required):
+Run the service against a configuration file (`-c` / `--config` is required), or print the version without starting
+the service (`-V` / `--version`):
 
 ```shell
 powergslb -c /etc/powergslb/powergslb.toml
+powergslb --version
 ```
 
 The service also needs a MariaDB database with the schema and seed data loaded (`database/scheme.sql` and

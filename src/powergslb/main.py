@@ -6,6 +6,7 @@ import logging
 from powergslb.monitor import MonitorManager, StatusRegistry
 from powergslb.server import AdminRequestHandler, PowerDNSRequestHandler, ServerManager
 from powergslb.system import Config, ServiceThread, SystemService
+from powergslb.version import VERSION
 from powergslb.view import ViewRule
 
 __all__ = ['PowerGSLB']
@@ -19,6 +20,7 @@ class PowerGSLB:
         """Parse arguments, load the config, and run the service threads under SystemService."""
         args_parser = argparse.ArgumentParser()
         args_parser.add_argument('-c', '--config', required=True)
+        args_parser.add_argument('-V', '--version', action='version', version=f'PowerGSLB {VERSION}')
         args = args_parser.parse_args()
 
         config = Config(args.config)
@@ -27,6 +29,7 @@ class PowerGSLB:
             format=config.get('logging', 'format'),
             level=config.get('logging', 'level')
         )
+        logging.info('PowerGSLB %s', VERSION)
 
         database = config.items('database')
         status = StatusRegistry()

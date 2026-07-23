@@ -1,10 +1,10 @@
 # pylint: disable=missing-function-docstring
 
-"""Graceful-shutdown integration test, exercised against the real systemd unit inside the container.
+"""Service lifecycle integration tests, exercised against the real systemd unit inside the container.
 
-Unlike the rest of
-the suite (pure HTTP/DNS clients), this drives `systemctl`, so it is skipped unless POWERGSLB_CONTAINER names a
-docker container to control. It must run serially - it stops the shared service.
+Unlike the rest of the suite (pure HTTP/DNS clients), this reads the journal and drives `systemctl`, so it is
+skipped unless POWERGSLB_CONTAINER names a docker container to control. It must run serially - it stops the shared
+service.
 """
 
 import os
@@ -14,6 +14,8 @@ from collections.abc import Iterator
 
 import pytest
 import requests
+
+from powergslb.version import VERSION
 
 CONTAINER = os.environ.get('POWERGSLB_CONTAINER', '')
 
@@ -58,6 +60,11 @@ def ensure_running(base_url: str) -> Iterator[None]:
     yield
     _systemctl('start', 'powergslb')
     _wait_serving(base_url)
+
+
+def test_startup_banner_logged() -> None:
+    # The banner carries the checkout's version, so a stale image under test fails here.
+    assert f'PowerGSLB {VERSION}' in _journal()
 
 
 @pytest.mark.usefixtures('ensure_running')

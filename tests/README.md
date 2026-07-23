@@ -27,7 +27,7 @@ tests/
 │   ├── test_dns_records.py             records via admin: disabled, views, geo, weight, routing policies, IPv6
 │   ├── test_ecs.py                     ECS scopeMask per answer row, plus the CLIENT-SUBNET option dig echoes
 │   ├── test_health.py                  static health status reporting and DNS consistency
-│   ├── test_lifecycle.py               systemctl stop/restart: no SIGKILL, clean rebind (needs POWERGSLB_CONTAINER)
+│   ├── test_lifecycle.py               banner, systemctl stop/restart: no SIGKILL, rebind (needs POWERGSLB_CONTAINER)
 │   ├── test_monitor_health.py          active fall/rise lifecycle, interpolation, bad-config resilience, all-down rule
 │   ├── test_monitor_types.py           all five check types: icmp, tcp, http, tls, exec
 │   ├── test_pdns_cache.py              dig-path cache OFF/ON per view/health/routing axis (needs POWERGSLB_CONTAINER)
@@ -35,7 +35,7 @@ tests/
 │   └── test_schema_constraints.py      raw-SQL constraints/triggers, GC, longest-zone-match (needs POWERGSLB_CONTAINER)
 └── unit/                               in-process unit tests (no container required); mirrors src/powergslb/ layout
     ├── test_build_backend.py           build_backend/backend.py: admin-asset pre-compression, .gz/.br, keep-smaller
-    ├── test_main.py                    entry point: argument parsing, thread wiring, SystemService startup
+    ├── test_main.py                    entry point: arguments, --version, banner, wiring, SystemService startup
     ├── test_version.py                 version constant is a semver string
     ├── client/
     │   ├── test_context.py            ClientContext: carries the pre-parsed client network plus a mutable geo

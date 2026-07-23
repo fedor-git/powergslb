@@ -2,8 +2,9 @@
 
 """Tests for the PowerGSLB entry point.
 
-PowerGSLB.main() parses -c, loads the config, configures logging, builds the monitor and the two server threads, and
-hands them to SystemService.start(). Everything external is faked so nothing connects or serves.
+PowerGSLB.main() parses -c (or answers --version), loads the config, configures logging, builds the monitor and the
+two server threads, and hands them to SystemService.start(). Everything external is faked so nothing connects or
+serves.
 """
 
 import sys
@@ -14,6 +15,7 @@ import pytest
 import powergslb.main
 from powergslb.main import PowerGSLB
 from powergslb.main import logging as main_logging
+from powergslb.version import VERSION
 
 
 class _FakeConfig:
@@ -91,3 +93,25 @@ def test_main_passes_level_name_to_basic_config(patched: dict[str, Any]) -> None
     PowerGSLB.main()
     assert patched['logging']['level'] == 'DEBUG'
     assert patched['logging']['format'] == '%(message)s'
+
+
+@pytest.mark.usefixtures('patched')
+def test_main_logs_version_banner(caplog: pytest.LogCaptureFixture) -> None:
+    # The banner opens the log, so every run states the version it is running.
+    with caplog.at_level('INFO'):
+        PowerGSLB.main()
+    assert caplog.messages[0] == f'PowerGSLB {VERSION}'
+    assert caplog.records[0].levelname == 'INFO'
+
+
+@pytest.mark.parametrize('flag', ['-V', '--version'])
+def test_main_version_flag_prints_and_exits(
+        flag: str, monkeypatch: pytest.MonkeyPatch, patched: dict[str, Any],
+        capsys: pytest.CaptureFixture[str]) -> None:
+    # Either spelling is answered while parsing, before the required -c is enforced and before anything is wired.
+    monkeypatch.setattr(sys, 'argv', ['powergslb', flag])
+    with pytest.raises(SystemExit) as exit_info:
+        PowerGSLB.main()
+    assert exit_info.value.code == 0
+    assert capsys.readouterr().out.strip() == f'PowerGSLB {VERSION}'
+    assert not patched['threads']
