@@ -43,6 +43,9 @@ where = ["src"]
 "powergslb.resources" = ["admin/**"]
 
 # See https://coverage.readthedocs.io/en/latest/config.html
+[tool.coverage.run]
+branch = true
+
 [tool.coverage.report]
 exclude_also = [
     "if __name__ == .__main__.:",

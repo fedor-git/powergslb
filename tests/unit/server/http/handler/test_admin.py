@@ -413,6 +413,18 @@ def test_send_head_malformed_qvalue_refuses_that_encoding(tmp_path: Path) -> Non
             f.close()
 
 
+def test_send_head_ignores_non_q_accept_encoding_parameter(tmp_path: Path) -> None:
+    # Only a q= parameter carries a quality; any other accept-ext is skipped, leaving the coding at q=1.
+    _make_asset(tmp_path)
+    handler = _static_recorder(tmp_path, '/app.js', {'Accept-Encoding': 'br;level=5;charset=utf-8'})
+    f = handler.send_head()
+    try:
+        assert dict(handler.headers_sent)['Content-Encoding'] == 'br'
+    finally:
+        if f is not None:
+            f.close()
+
+
 def test_send_head_ignores_malformed_if_modified_since(tmp_path: Path) -> None:
     _make_asset(tmp_path)
     handler = _static_recorder(tmp_path, '/app.js', {'Accept-Encoding': 'br', 'If-Modified-Since': 'garbage'})
@@ -430,6 +442,20 @@ def test_send_head_naive_if_modified_since_is_treated_as_utc(tmp_path: Path) -> 
     _make_asset(tmp_path)
     handler = _static_recorder(tmp_path, '/app.js',
                                {'Accept-Encoding': 'br', 'If-Modified-Since': 'Mon, 01 Jan 1990 00:00:00'})
+    f = handler.send_head()
+    try:
+        assert handler.responses_sent == [HTTPStatus.OK]
+    finally:
+        if f is not None:
+            f.close()
+
+
+def test_send_head_offset_if_modified_since_skips_the_comparison(tmp_path: Path) -> None:
+    # Mirroring the stdlib, only a UTC If-Modified-Since is compared; an explicit offset skips the 304 path.
+    # The date is far future, so a comparison that did run would answer 304 - the 200 proves it is skipped.
+    _make_asset(tmp_path)
+    handler = _static_recorder(tmp_path, '/app.js',
+                               {'Accept-Encoding': 'br', 'If-Modified-Since': 'Fri, 01 Jan 2100 00:00:00 +0500'})
     f = handler.send_head()
     try:
         assert handler.responses_sent == [HTTPStatus.OK]
