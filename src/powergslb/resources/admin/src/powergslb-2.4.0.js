@@ -43,13 +43,13 @@ var gridPopupForm = function (event) {
             openPopupForm(event, 'domain', 400, 210, 'formDomains');
             break;
         case 'gridMonitors':
-            openPopupForm(event, 'monitor', 400, 210, 'formMonitors');
+            openPopupForm(event, 'monitor', 400, 425, 'formMonitors');
             break;
         case 'gridRecords':
             openPopupForm(event, 'record', 400, 485, 'formRecords');
             break;
         case 'gridRoutings':
-            openPopupForm(event, 'routing', 400, 210, 'formRoutings');
+            openPopupForm(event, 'routing', 400, 425, 'formRoutings');
             break;
         case 'gridTypes':
             openPopupForm(event, 'type', 400, 245, 'formTypes');
@@ -58,7 +58,7 @@ var gridPopupForm = function (event) {
             openPopupForm(event, 'user', 400, 245, 'formUsers');
             break;
         case 'gridViews':
-            openPopupForm(event, 'view', 400, 210, 'formViews');
+            openPopupForm(event, 'view', 400, 425, 'formViews');
             break;
     }
 };
@@ -118,6 +118,58 @@ var stopAutoReload = function () {
         clearInterval(reloadIntervalId);
         reloadIntervalId = 0;
         w2ui.gridStatus.toolbar.uncheck('reload');
+    }
+};
+
+// ====================================================
+// Textarea fields
+// ====================================================
+
+// Reformat a JSON string; anything that does not parse is returned untouched so a typo stays editable.
+// Indent 0 is the stored one-line form with a space after colons and commas.
+var reformatJson = function (value, indent) {
+    try {
+        var parsed = JSON.parse(value);
+        if (indent) {
+            return JSON.stringify(parsed, null, indent);
+        }
+        return JSON.stringify(parsed, null, 1)
+            .replace(/,\n\s*/g, ', ')
+            .replace(/\n\s*/g, '');
+    } catch (error) {
+        return value;
+    }
+};
+
+// Indented while editing, one line as stored.
+var expandJson = function (value) {
+    return reformatJson(value, 2);
+};
+
+var collapseJson = function (value) {
+    return reformatJson(value, 0);
+};
+
+// One token per line while editing, whitespace-separated as stored.
+var expandTokens = function (value) {
+    return value.split(/\s+/).filter(Boolean).join('\n');
+};
+
+var collapseTokens = function (value) {
+    return value.split(/\s+/).filter(Boolean).join(' ');
+};
+
+// Fields edited in a textarea whose display form differs from the stored one, keyed by form name.
+var textareaFields = {
+    formMonitors: {field: 'monitor_json', expand: expandJson, collapse: collapseJson},
+    formRoutings: {field: 'policy_json', expand: expandJson, collapse: collapseJson},
+    formViews: {field: 'rule', expand: expandTokens, collapse: collapseTokens}
+};
+
+// Rewrite the record field in place through one of its transforms.
+var transformField = function (record, field, transform) {
+    if (typeof record[field] === 'string') {
+        record[field] = transform(record[field]);
     }
 };
 
@@ -272,8 +324,8 @@ var config = {
         postData: {data: 'domains'},
         columns: [
             {field: 'recid', caption: 'ID', size: '50px', resizable: true, sortable: true},
-            {field: 'domain', caption: 'Domain', size: '100px', resizable: true, sortable: true},
-            {field: 'description', caption: 'Description', size: '300px', resizable: true, sortable: true}
+            {field: 'domain', caption: 'Domain', size: '250px', resizable: true, sortable: true},
+            {field: 'description', caption: 'Description', size: '750px', resizable: true, sortable: true}
         ],
         searches: [
             {field: 'recid', caption: 'ID', type: 'int'},
@@ -300,13 +352,13 @@ var config = {
         postData: {data: 'monitors'},
         columns: [
             {field: 'recid', caption: 'ID', size: '50px', resizable: true, sortable: true},
-            {field: 'monitor', caption: 'Monitor', size: '150px', resizable: true, sortable: true},
-            {field: 'monitor_json', caption: 'Monitor JSON', size: '750px', resizable: true, sortable: true}
+            {field: 'monitor', caption: 'Monitor', size: '250px', resizable: true, sortable: true},
+            {field: 'monitor_json', caption: 'Parameters', size: '750px', resizable: true, sortable: true}
         ],
         searches: [
             {field: 'recid', caption: 'ID', type: 'int'},
             {field: 'monitor', caption: 'Monitor', type: 'text'},
-            {field: 'monitor_json', caption: 'Monitor JSON', type: 'text'}
+            {field: 'monitor_json', caption: 'Parameters', type: 'text'}
         ]
     },
 
@@ -315,7 +367,7 @@ var config = {
         postData: {data: 'monitors'},
         fields: [
             {field: 'monitor', type: 'text', required: true, html: {caption: 'Monitor: '}},
-            {field: 'monitor_json', type: 'text', required: true, html: {caption: 'Monitor JSON: '}}
+            {field: 'monitor_json', type: 'textarea', required: true, html: {caption: 'Parameters: '}}
         ]
     },
 
@@ -375,15 +427,9 @@ var config = {
                 }
             },
             {field: 'content', type: 'text', required: true, html: {caption: 'Content: '}},
-            {
-                field: 'ttl', type: 'int', required: true, html: {caption: 'TTL: '},
-                options: {autoFormat: false}
-            },
+            {field: 'ttl', type: 'int', required: true, html: {caption: 'TTL: '}},
             {field: 'disabled', type: 'toggle', required: false, html: {caption: 'Disabled: '}},
-            {
-                field: 'weight', type: 'int', required: false, html: {caption: 'Weight: '},
-                options: {autoFormat: false}
-            },
+            {field: 'weight', type: 'int', required: false, html: {caption: 'Weight: '}},
             {
                 field: 'policy', type: 'combo', required: true, html: {caption: 'Routing: '},
                 options: {
@@ -417,13 +463,13 @@ var config = {
         postData: {data: 'routings'},
         columns: [
             {field: 'recid', caption: 'ID', size: '50px', resizable: true, sortable: true},
-            {field: 'policy', caption: 'Policy', size: '150px', resizable: true, sortable: true},
-            {field: 'policy_json', caption: 'Policy JSON', size: '750px', resizable: true, sortable: true}
+            {field: 'policy', caption: 'Policy', size: '250px', resizable: true, sortable: true},
+            {field: 'policy_json', caption: 'Parameters', size: '750px', resizable: true, sortable: true}
         ],
         searches: [
             {field: 'recid', caption: 'ID', type: 'int'},
             {field: 'policy', caption: 'Policy', type: 'text'},
-            {field: 'policy_json', caption: 'Policy JSON', type: 'text'}
+            {field: 'policy_json', caption: 'Parameters', type: 'text'}
         ]
     },
 
@@ -432,7 +478,7 @@ var config = {
         postData: {data: 'routings'},
         fields: [
             {field: 'policy', type: 'text', required: true, html: {caption: 'Policy: '}},
-            {field: 'policy_json', type: 'text', required: true, html: {caption: 'Policy JSON: '}}
+            {field: 'policy_json', type: 'textarea', required: true, html: {caption: 'Parameters: '}}
         ]
     },
 
@@ -445,8 +491,8 @@ var config = {
         postData: {data: 'types'},
         columns: [
             {field: 'recid', caption: 'Value', size: '50px', resizable: true, sortable: true},
-            {field: 'name_type', caption: 'Type', size: '100px', resizable: true, sortable: true},
-            {field: 'description', caption: 'Description', size: '300px', resizable: true, sortable: true}
+            {field: 'name_type', caption: 'Type', size: '250px', resizable: true, sortable: true},
+            {field: 'description', caption: 'Description', size: '750px', resizable: true, sortable: true}
         ],
         searches: [
             {field: 'recid', caption: 'Value', type: 'int'},
@@ -459,10 +505,7 @@ var config = {
         name: 'formTypes',
         postData: {data: 'types'},
         fields: [
-            {
-                field: 'recid', type: 'int', required: true, html: {caption: 'Value: '},
-                options: {autoFormat: false}
-            },
+            {field: 'recid', type: 'int', required: true, html: {caption: 'Value: '}},
             {field: 'name_type', type: 'text', required: true, html: {caption: 'Type: '}},
             {field: 'description', type: 'text', required: true, html: {caption: 'Description: '}}
         ]
@@ -477,8 +520,8 @@ var config = {
         postData: {data: 'views'},
         columns: [
             {field: 'recid', caption: 'ID', size: '50px', resizable: true, sortable: true},
-            {field: 'view', caption: 'View', size: '100px', resizable: true, sortable: true},
-            {field: 'rule', caption: 'Rule', size: '300px', resizable: true, sortable: true}
+            {field: 'view', caption: 'View', size: '250px', resizable: true, sortable: true},
+            {field: 'rule', caption: 'Rule', size: '750px', resizable: true, sortable: true}
         ],
         searches: [
             {field: 'recid', caption: 'ID', type: 'int'},
@@ -492,7 +535,7 @@ var config = {
         postData: {data: 'views'},
         fields: [
             {field: 'view', type: 'text', required: true, html: {caption: 'View: '}},
-            {field: 'rule', type: 'text', required: true, html: {caption: 'Rule: '}}
+            {field: 'rule', type: 'textarea', required: true, html: {caption: 'Rule: '}}
         ]
     },
 
@@ -505,8 +548,8 @@ var config = {
         postData: {data: 'users'},
         columns: [
             {field: 'recid', caption: 'ID', size: '50px', resizable: true, sortable: true},
-            {field: 'user', caption: 'User', size: '100px', resizable: true, sortable: true},
-            {field: 'name', caption: 'Name', size: '150px', resizable: true, sortable: true}
+            {field: 'user', caption: 'User', size: '250px', resizable: true, sortable: true},
+            {field: 'name', caption: 'Name', size: '750px', resizable: true, sortable: true}
         ],
         searches: [
             {field: 'recid', caption: 'ID', type: 'int'},
@@ -569,15 +612,30 @@ var config = {
     }
 };
 
-// Every column of every grid renders its value as escaped text instead of markup.
+// Every column of every grid renders its value as escaped text instead of markup, wrapped in the hover-title div.
 var escapeCell = function (record, index, colIndex) {
-    return w2utils.encodeTags(this.getCellValue(index, colIndex));
+    var value = w2utils.encodeTags(this.getCellValue(index, colIndex));
+    return '<div title="' + value + '">' + value + '</div>';
 };
 
 Object.keys(config).forEach(function (name) {
     (config[name].columns || []).forEach(function (column) {
         column.render = escapeCell;
     });
+});
+
+// Expand the stored one-line value when a record loads, collapse it back on the way to the server.
+Object.keys(textareaFields).forEach(function (name) {
+    var spec = textareaFields[name];
+    config[name].onLoad = function (event) {
+        var form = this;
+        event.onComplete = function () {
+            transformField(form.record, spec.field, spec.expand);
+        };
+    };
+    config[name].onSubmit = function (event) {
+        transformField(event.postData.record, spec.field, spec.collapse);
+    };
 });
 
 // Apply the shared configuration to every editable PowerGSLB entity, keyed by base name.
@@ -631,6 +689,8 @@ $(function () {
     w2obj.grid.prototype.buttons.add.caption = 'Add';
     // Search posts and the server parses date value in this format.
     w2utils.settings.date_format = 'yyyy-mm-dd';
+    // No thousands separator in a numeric field or search.
+    w2utils.settings.groupSymbol = '';
 
     // On page initialization.
     $('#powergslb').w2layout(config.layout);

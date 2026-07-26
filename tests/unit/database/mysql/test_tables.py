@@ -121,23 +121,23 @@ def test_audit_select_keeps_logged_datetime_and_exposes_columns(db: _FakeExecuto
 def test_audit_record_inserts_one_row(db: _FakeExecutor) -> None:
     # an insert has no before state; the column takes NULL
     assert AUDIT.record(db, [AuditRow('admin', '203.0.113.1', 'save', 'domains', 7,
-                                     None, '{"domain":"example.com"}')]) == 1
+                                     None, '{"domain": "example.com"}')]) == 1
     sql, params = db.calls[-1]
     assert sql == ('INSERT INTO `audit` (`user`, `client_ip`, `action`, `data`, `record_id`, `record_before`, '
                    '`record_after`) VALUES (%s, %s, %s, %s, %s, %s, %s)')
-    assert params == ('admin', '203.0.113.1', 'save', 'domains', 7, None, '{"domain":"example.com"}')
+    assert params == ('admin', '203.0.113.1', 'save', 'domains', 7, None, '{"domain": "example.com"}')
 
 
 def test_audit_record_inserts_multiple_rows(db: _FakeExecutor) -> None:
     db.affected = 2
-    rows = [AuditRow('admin', '203.0.113.1', 'delete', 'domains', 1, '{"recid":1}', None),
-            AuditRow('admin', '203.0.113.1', 'delete', 'domains', 2, '{"recid":2}', None)]
+    rows = [AuditRow('admin', '203.0.113.1', 'delete', 'domains', 1, '{"recid": 1}', None),
+            AuditRow('admin', '203.0.113.1', 'delete', 'domains', 2, '{"recid": 2}', None)]
     assert AUDIT.record(db, rows) == 2
     sql, params = db.calls[-1]
     assert sql == ('INSERT INTO `audit` (`user`, `client_ip`, `action`, `data`, `record_id`, `record_before`, '
                    '`record_after`) VALUES (%s, %s, %s, %s, %s, %s, %s), (%s, %s, %s, %s, %s, %s, %s)')
-    assert params == ('admin', '203.0.113.1', 'delete', 'domains', 1, '{"recid":1}', None,
-                      'admin', '203.0.113.1', 'delete', 'domains', 2, '{"recid":2}', None)
+    assert params == ('admin', '203.0.113.1', 'delete', 'domains', 1, '{"recid": 1}', None,
+                      'admin', '203.0.113.1', 'delete', 'domains', 2, '{"recid": 2}', None)
 
 
 def test_audit_record_empty_is_noop(db: _FakeExecutor) -> None:

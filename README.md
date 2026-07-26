@@ -838,7 +838,9 @@ in [database/README.md](database/README.md).
 The admin console is a single-page app served over HTTPS behind Basic Auth. It manages every entity through editable
 grids - Domains, Monitors, Records, Routings, Types, Views, and Users - with inline add, edit, and delete. A live
 Status grid shows the current health of each record, and a read-only Audit grid shows every admin write. Search, sort,
-and paging run server-side, so large record sets stay responsive. The console offers a light and a dark theme.
+and paging run server-side, so large record sets stay responsive. Monitor and routing parameters are edited as indented
+JSON and view rules as one token per line, both normalized back to their stored one-line form on save. The console
+offers a light and a dark theme.
 
 **Status (Light theme)**
 
@@ -1023,7 +1025,10 @@ or a script. This is useful when a record should serve only while some dependenc
 record, an upstream gateway, a database, or any external API:
 
 ```json
-{"type": "http", "url": "https://origin.example.com/health"}
+{
+  "type": "http",
+  "url": "https://origin.example.com/health"
+}
 ```
 
 ### Exec parameters
@@ -1039,7 +1044,13 @@ record, an upstream gateway, a database, or any external API:
 Example:
 
 ```json
-{"type": "exec", "args": ["/etc/powergslb/powergslb-check", "${content}"]}
+{
+  "type": "exec",
+  "args": [
+    "/etc/powergslb/powergslb-check",
+    "${content}"
+  ]
+}
 ```
 
 The whole run is bounded by `timeout`; on timeout the process is killed and the check fails. Only the first
@@ -1056,7 +1067,10 @@ any excess is drained so a chatty command can still exit.
 Example:
 
 ```json
-{"type": "icmp", "ip": "${content}"}
+{
+  "type": "icmp",
+  "ip": "${content}"
+}
 ```
 
 ICMP checks open a raw ICMP socket and therefore need `CAP_NET_RAW` or root. The shipped container satisfies this:
@@ -1087,7 +1101,10 @@ and every request sends the `http_user_agent` header (same section) - both apply
 Example:
 
 ```json
-{"type": "http", "url": "http://${content}/health"}
+{
+  "type": "http",
+  "url": "http://${content}/health"
+}
 ```
 
 Example with optional parameters - require an exact `200` carrying `"ok"` in the body, over self-signed HTTPS, and
@@ -1118,7 +1135,11 @@ override two timing defaults:
 Example:
 
 ```json
-{"type": "tcp", "ip": "${content}", "port": 80}
+{
+  "type": "tcp",
+  "ip": "${content}",
+  "port": 80
+}
 ```
 
 The check opens a TCP connection to `ip:port` and passes as soon as the handshake completes; it sends no data and
@@ -1137,7 +1158,11 @@ reads no response. Connection setup is bounded by `timeout`; a refused connectio
 Example:
 
 ```json
-{"type": "tls", "ip": "${content}", "port": 443}
+{
+  "type": "tls",
+  "ip": "${content}",
+  "port": 443
+}
 ```
 
 The check opens a TCP connection to `ip:port` and completes the TLS handshake. Connection setup and the handshake are

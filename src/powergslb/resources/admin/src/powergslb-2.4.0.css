@@ -1,11 +1,65 @@
 /*
- * PowerGSLB admin dark theme.
+ * PowerGSLB admin styles: layout rules, then the dark theme.
  *
- * Overrides the vendored w2ui 1.4.3 light palette. Every rule that restyles a w2ui element is scoped under
- * html[data-theme="dark"], so the light theme (attribute absent or "light") is the untouched w2ui default.
+ * The dark theme overrides the vendored w2ui 1.4.3 light palette. Every rule that restyles a w2ui element for the
+ * theme is scoped under html[data-theme="dark"], so the light theme (attribute absent or "light") keeps the original
+ * colors. The layout rules below carry no color and apply to both themes.
  */
 
-/* Palette */
+/* The popup is a fixed width, so its fields take all of it: a 72px label column fits the widest caption. */
+#w2ui-popup .w2ui-field > label {
+    width: 72px;
+}
+
+#w2ui-popup .w2ui-field > div {
+    margin-left: 80px;
+    margin-right: 4px;
+}
+
+/* The toggle is a checkbox drawn as a slider by w2ui and keeps its own size. */
+#w2ui-popup .w2ui-field > div > input:not([type=checkbox]),
+#w2ui-popup .w2ui-field > div > select,
+#w2ui-popup .w2ui-field > div > textarea {
+    width: 100%;
+}
+
+/* Give every textarea field the same fixed editing area. */
+#w2ui-popup .w2ui-field > div > textarea {
+    height: 240px;
+    font-family: monospace;
+    font-size: 12px;
+    resize: none;
+}
+
+/* Search overlay: one value column 300px, two value column 140px each around a 20px separator. */
+.w2ui-overlay .w2ui-grid-searches table td.value {
+    font-size: 0; /* collapses the text writes between the two inputs, redrawn below */
+    white-space: nowrap; /* the second input never wraps below the first */
+}
+
+/* w2ui writes an inline width on the text inputs, so only !important resizes them. */
+.w2ui-overlay .w2ui-grid-searches table td.value input[type=text],
+.w2ui-overlay .w2ui-grid-searches table td.value select {
+    box-sizing: border-box;
+    width: 300px !important;
+    margin: 0;
+}
+
+/* The 'between' search reveals a second input, so the two split the value column. */
+.w2ui-overlay .w2ui-grid-searches table td.value:has(> span:not([style*="none"])) > input[type=text],
+.w2ui-overlay .w2ui-grid-searches table td.value > span > input[type=text] {
+    width: 140px !important;
+}
+
+.w2ui-overlay .w2ui-grid-searches table td.value > span::before {
+    content: '-';
+    display: inline-block;
+    width: 20px;
+    font-size: 13px;
+    text-align: center;
+}
+
+/* The dark palette */
 html[data-theme="dark"] {
     color-scheme: dark;
 

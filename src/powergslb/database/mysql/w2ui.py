@@ -151,10 +151,12 @@ class W2UIMixIn(abc.ABC):
     def _record_json(record: dict[str, Any] | None) -> str | None:
         """Serialize one record for the audit trail.
 
+        Keeps the json.dumps separators, a one-line form the admin console writes (space after colons and commas).
+
         :param record: The record to serialize, or None for the side of the write that has no state.
-        :returns: The compact JSON text, or None.
+        :returns: The JSON text, or None.
         :raises TypeError: When the record holds a value JSON cannot serialize.
         """
         if record is None:
             return None
-        return json.dumps(record, separators=(',', ':'), default=json_default)
+        return json.dumps(record, default=json_default)

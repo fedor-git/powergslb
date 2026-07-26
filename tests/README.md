@@ -36,6 +36,7 @@ tests/
 └── unit/                               in-process unit tests (no container required); mirrors src/powergslb/ layout
     ├── test_build_backend.py           build_backend/backend.py: admin-asset pre-compression, .gz/.br, keep-smaller
     ├── test_main.py                    entry point: arguments, --version, banner, wiring, SystemService startup
+    ├── test_seed_data.py               data.sql seed JSON is the one-line form the admin console writes back
     ├── test_version.py                 version constant is a semver string
     ├── client/
     │   ├── test_context.py            ClientContext: carries the pre-parsed client network plus a mutable geo

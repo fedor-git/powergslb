@@ -193,7 +193,7 @@ def test_save_insert_audits_the_stored_row_under_its_new_id(database: _FakeW2UID
         'INSERT INTO `domains`', 'SELECT `id` AS `recid`, `domain`, `description`', 'INSERT INTO `audit`']
     # an insert has no before state, and the trail records the real id the write generated
     assert database.calls[-1][1] == ('admin', '203.0.113.1', 'save', 'domains', 42, None,
-                                     '{"recid":42,"domain":"example.com","description":""}')
+                                     '{"recid": 42, "domain": "example.com", "description": ""}')
     assert database.events == ['begin', 'modify', 'select', 'modify', 'commit']
 
 
@@ -223,15 +223,15 @@ def test_save_update_audits_the_row_before_and_after(database: _FakeW2UIDatabase
     # read, write, read back, audit: no LAST_INSERT_ID lookup, the update already knows its key
     assert database.events == ['begin', 'select', 'modify', 'select', 'modify', 'commit']
     assert database.calls[-1][1] == ('admin', '203.0.113.1', 'save', 'domains', 7,
-                                     '{"recid":7,"domain":"old.example.com","description":""}',
-                                     '{"recid":7,"domain":"new.example.com","description":""}')
+                                     '{"recid": 7, "domain": "old.example.com", "description": ""}',
+                                     '{"recid": 7, "domain": "new.example.com", "description": ""}')
 
 
 def test_save_audits_the_stored_row_not_the_posted_fields(database: _FakeW2UIDatabase) -> None:
     # the posted fields need be neither complete nor what lands in the table; the trail takes the read-back row
     database.select_after = [{'recid': 42, 'domain': 'example.com', 'description': ''}]
     database.save_data('domains', 0, _USER, domain='example.com')
-    assert database.calls[-1][1][-1] == '{"recid":42,"domain":"example.com","description":""}'
+    assert database.calls[-1][1][-1] == '{"recid": 42, "domain": "example.com", "description": ""}'
 
 
 def test_save_of_a_writable_key_audits_the_posted_key(database: _FakeW2UIDatabase) -> None:
@@ -249,7 +249,7 @@ def test_delete_data_audits_inside_the_transaction(database: _FakeW2UIDatabase) 
                                                                     'INSERT INTO `audit`']
     # the trail keeps the content the delete removed, read before it ran, and has no after state
     assert database.calls[-1][1] == ('admin', '203.0.113.1', 'delete', 'domains', 7,
-                                     '{"recid":7,"domain":"gone.example.com"}', None)
+                                     '{"recid": 7, "domain": "gone.example.com"}', None)
 
 
 def test_delete_data_audits_every_row_in_one_insert(database: _FakeW2UIDatabase) -> None:
@@ -267,13 +267,13 @@ def test_audit_records_the_masked_password_the_read_returns(database: _FakeW2UID
     database.select_after = [{'recid': 3, 'user': 'bob', 'name': 'Bob', 'password': '*****'}]
     database.save_data('users', 0, _USER, user='bob', name='Bob', password='topsecret')
     record_json = database.calls[-1][1][-1]
-    assert '"password":"*****"' in record_json and 'topsecret' not in record_json
+    assert '"password": "*****"' in record_json and 'topsecret' not in record_json
 
 
 def test_audit_serializes_a_datetime_row_value(database: _FakeW2UIDatabase) -> None:
     database.select_result = [{'recid': 3, 'logged': datetime.datetime(2026, 7, 18, 12, 34, 56)}]
     database.delete_data('domains', [3], _USER)
-    assert database.calls[-1][1][-2] == '{"recid":3,"logged":"2026-07-18 12:34:56"}'
+    assert database.calls[-1][1][-2] == '{"recid": 3, "logged": "2026-07-18 12:34:56"}'
 
 
 def test_audit_serialization_failure_rolls_the_write_back(database: _FakeW2UIDatabase) -> None:
