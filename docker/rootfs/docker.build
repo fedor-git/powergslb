@@ -25,6 +25,9 @@ curl -fsSL "$dbip_url" | gunzip > /usr/share/powergslb/dbip-country-lite.mmdb
 # Enable services so systemd starts them on container boot.
 systemctl enable mariadb pdns powergslb powergslb-certgen powergslb-dbinit
 
+# No display manager, so multi-user.target is the boot goal.
+systemctl set-default multi-user.target
+
 # Remove package cache, MariaDB datadir, logs, and this script.
 dnf clean all
 rm -rf /var/cache/dnf /var/lib/mysql/* /var/log/* /tmp/* "$0"
