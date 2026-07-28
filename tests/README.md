@@ -27,7 +27,8 @@ tests/
 │   ├── test_dns_records.py             records via admin: disabled, views, geo, weight, routing policies, IPv6
 │   ├── test_ecs.py                     ECS scopeMask per answer row, plus the CLIENT-SUBNET option dig echoes
 │   ├── test_health.py                  static health status reporting and DNS consistency
-│   ├── test_lifecycle.py               banner, systemctl stop/restart: no SIGKILL, rebind (needs POWERGSLB_CONTAINER)
+│   ├── test_lifecycle.py               banner, no failed units, systemctl stop/restart: no SIGKILL, rebind
+│   │                                   (needs POWERGSLB_CONTAINER)
 │   ├── test_monitor_health.py          active fall/rise lifecycle, interpolation, bad-config resilience, all-down rule
 │   ├── test_monitor_types.py           all five check types: icmp, tcp, http, tls, exec
 │   ├── test_pdns_cache.py              dig-path cache OFF/ON per view/health/routing axis (needs POWERGSLB_CONTAINER)

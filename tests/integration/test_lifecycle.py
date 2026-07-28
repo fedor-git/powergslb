@@ -1,6 +1,6 @@
 # pylint: disable=missing-function-docstring
 
-"""Service lifecycle integration tests, exercised against the real systemd unit inside the container.
+"""Service lifecycle integration tests, exercised against the real systemd units inside the container.
 
 Unlike the rest of the suite (pure HTTP/DNS clients), this reads the journal and drives `systemctl`, so it is
 skipped unless POWERGSLB_CONTAINER names a docker container to control. It must run serially - it stops the shared
@@ -65,6 +65,13 @@ def ensure_running(base_url: str) -> Iterator[None]:
 def test_startup_banner_logged() -> None:
     # The banner carries the checkout's version, so a stale image under test fails here.
     assert f'PowerGSLB {VERSION}' in _journal()
+
+
+def test_no_failed_units() -> None:
+    # A mask that removes a unit something still Requires= surfaces here as a failed dependent.
+    failed = _systemctl('list-units', '--failed', '--no-legend', '--plain')
+    assert failed.returncode == 0, failed.stderr
+    assert not failed.stdout.strip(), failed.stdout
 
 
 @pytest.mark.usefixtures('ensure_running')

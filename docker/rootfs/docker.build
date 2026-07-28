@@ -28,6 +28,32 @@ systemctl enable mariadb pdns powergslb powergslb-certgen powergslb-dbinit
 # No display manager, so multi-user.target is the boot goal.
 systemctl set-default multi-user.target
 
+# Mask systemd units unused in the container: no tty or interactive login, no D-Bus client, no swap or
+# remote mounts, no kernel pseudo-filesystems (the host owns those), and a runtime-only journal.
+systemctl mask \
+    dbus.socket \
+    dnf-makecache.timer \
+    remote-fs.target \
+    swap.target \
+    sys-kernel-config.mount \
+    sys-kernel-debug.mount \
+    sys-kernel-tracing.mount \
+    systemd-ask-password-console.path \
+    systemd-ask-password-wall.path \
+    systemd-creds.socket \
+    systemd-hostnamed.socket \
+    systemd-initctl.socket \
+    systemd-journal-flush.service \
+    systemd-network-generator.service \
+    systemd-sysext.socket \
+    systemd-tmpfiles-clean.timer \
+    systemd-update-utmp-runlevel.service \
+    systemd-update-utmp.service \
+    systemd-user-sessions.service
+
+# Stamp /etc and /var as current, so the ConditionNeedsUpdate= units skip the first boot.
+touch /etc/.updated /var/.updated
+
 # Remove package cache, MariaDB datadir, logs, and this script.
 dnf clean all
 rm -rf /var/cache/dnf /var/lib/mysql/* /var/log/* /tmp/* "$0"
