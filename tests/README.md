@@ -166,7 +166,7 @@ Use this when you want full control.
 docker build -f docker/Dockerfile --force-rm --no-cache -t powergslb:dev .
 
 # 2. Start - bind backend to 0.0.0.0 so it is reachable on the container IP
-docker run -d --name powergslb --privileged \
+docker run -dt --name powergslb --privileged \
     -e POWERGSLB_SERVER_ADDRESS=0.0.0.0 \
     -e POWERGSLB_MONITOR_UPDATE_INTERVAL=2 \
     --tmpfs /run --tmpfs /tmp \
@@ -206,7 +206,7 @@ database instead, override the `[database]` config with `POWERGSLB_DATABASE_*` e
 time:
 
 ```bash
-docker run -d --name powergslb --privileged \
+docker run -dt --name powergslb --privileged \
     -e POWERGSLB_SERVER_ADDRESS=0.0.0.0 \
     -e POWERGSLB_MONITOR_UPDATE_INTERVAL=2 \
     -e POWERGSLB_DATABASE_HOST=192.168.1.20 \
@@ -236,6 +236,7 @@ mariadb -h 192.168.1.20 -u powergslb -p powergslb \
 If tests fail, the container is left running:
 
 ```bash
+docker logs powergslb
 docker exec -it powergslb journalctl -u powergslb
 docker exec -it powergslb journalctl -u mariadb
 docker exec -it powergslb journalctl -u pdns

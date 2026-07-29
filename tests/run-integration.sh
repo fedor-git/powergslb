@@ -38,6 +38,7 @@ fi
 leave_running() {
     echo
     echo "$1 - container '${CONTAINER}' left running for inspection."
+    echo "  docker logs ${CONTAINER}"
     echo "  docker exec -it ${CONTAINER} journalctl -u powergslb"
     echo "  docker exec -it ${CONTAINER} journalctl -u mariadb"
     echo "  docker exec -it ${CONTAINER} journalctl -u pdns"
@@ -66,7 +67,7 @@ fi
 
 # start
 echo "Starting container '${CONTAINER}'..."
-docker run -d --name "${CONTAINER}" --privileged \
+docker run -dt --name "${CONTAINER}" --privileged \
     -e POWERGSLB_SERVER_ADDRESS=0.0.0.0 \
     -e POWERGSLB_MONITOR_UPDATE_INTERVAL=2 \
     --tmpfs /run --tmpfs /tmp \

@@ -606,6 +606,19 @@ docker exec -it powergslb bash
 docker stop powergslb
 ```
 
+The container log carries the boot progress and the errors of every service (PowerGSLB, PowerDNS, MariaDB, systemd
+itself). The journal keeps every level, volatile and capped at 32 MB:
+
+```shell
+docker logs -f powergslb
+docker exec powergslb journalctl -u powergslb
+```
+
+Forwarding needs a tty (the `-t` above). The console level is a run-time choice, no image rebuild required: systemd
+reads the arguments of PID 1 as its kernel command line, so appending
+`/sbin/init systemd.journald.max_level_console=info` to the `docker run` command adds the service INFO lines to
+`docker logs`. See [journald.conf](https://www.freedesktop.org/software/systemd/man/latest/journald.conf.html).
+
 To reach the services on the host instead of the container IP, publish the ports with
 `-p 53:53/tcp -p 53:53/udp -p 443:443/tcp`. Note that these may conflict with a DNS resolver or HTTPS service already
 listening on the host, so connecting to the container IP is usually simpler.
