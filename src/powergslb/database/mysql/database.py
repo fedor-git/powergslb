@@ -218,9 +218,7 @@ class MySQLDatabase(PowerDNSMixIn, W2UIMixIn):
 
         unwrapped_params = self._unwrap_params(params)
 
-        # If last query had infrastructure error, try reconnect once
-        if self._infrastructure_error_occurred:
-            logging.debug('Attempting reconnect after infrastructure error...')
+        if getattr(self, '_infrastructure_error_occurred', False):
             try:
                 self._reconnect()
                 self._infrastructure_error_occurred = False
