@@ -223,9 +223,10 @@ class MySQLDatabase(PowerDNSMixIn, W2UIMixIn):
                 self._infrastructure_error_occurred = False
                 logging.info('Successfully recovered from infrastructure error')
             except mysql.connector.Error as e:
-                # Reconnect failed, keep trying on next query
+                # Reconnect failed; keep the flag set so future queries keep attempting
+                # reconnect before running health checks/logging again.
                 logging.debug('Reconnect failed: %s. Will retry on next query.', e)
-                self._infrastructure_error_occurred = False  # Reset to try again next time
+                self._infrastructure_error_occurred = True
                 raise
 
         # Check connection and cluster health before executing query
