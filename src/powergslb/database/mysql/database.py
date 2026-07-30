@@ -111,11 +111,11 @@ class MySQLDatabase(PowerDNSMixIn, W2UIMixIn):
                         4: 'Synced'
                     }
                     state_name = state_names.get(state_value, 'Unknown')
-                    raise mysql.connector.Error(
-                        f'Galera cluster not synced (wsrep_local_state={state_value} {state_name})'
-                    )
-                logging.debug('Galera cluster healthy (wsrep_local_state=Synced)')
         except mysql.connector.Error as e:
+            # Only suppress errors coming from querying Galera state; if we raised the
+            # "cluster not synced" error above, propagate it to the caller.
+            if 'Galera cluster not synced' in str(e):
+                raise
             # If we can't query Galera state, it means the connection itself is broken.
             # Don't wrap the error; let the caller handle the original exception which may
             # have the infrastructure error code (2003, 2005).
