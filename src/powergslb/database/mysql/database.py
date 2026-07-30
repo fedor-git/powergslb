@@ -65,11 +65,14 @@ class MySQLDatabase(PowerDNSMixIn, W2UIMixIn):
 
         :raises: mysql.connector.Error if connection dead or cluster not synced.
         """
+        ping = getattr(self._connection, 'ping', None)
+        if ping is None:
+            return
         try:
-            self._connection.ping(
-                reconnect=self._ping_reconnect,
-                attempts=self._ping_attempts,
-                delay=self._ping_delay
+            ping(
+                reconnect=getattr(self, '_ping_reconnect', False),
+                attempts=getattr(self, '_ping_attempts', 1),
+                delay=getattr(self, '_ping_delay', 0)
             )
         except mysql.connector.Error as e:
             # Connection failed; check if it's a Galera cluster issue.
