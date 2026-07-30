@@ -147,7 +147,7 @@ class MySQLDatabase(PowerDNSMixIn, W2UIMixIn):
             errno = error.errno
             # errno might be 2003/2005 (MySQL codes) or system errno like 111 (Connection refused)
             # MySQL codes are in range 1000-9999, system errno much lower
-            if 1000 <= errno <= 9999:
+            if isinstance(errno, int) and 1000 <= errno <= 9999:
                 return errno
         
         # Parse from error message: look for "2003" or "2005" pattern
