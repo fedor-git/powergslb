@@ -235,8 +235,9 @@ class MySQLDatabase(PowerDNSMixIn, W2UIMixIn):
         except mysql.connector.Error as e:
             # Infrastructure errors (DNS, network unreachable): mark for next query, fail fast
             if self._is_infrastructure_error(e):
+                if not getattr(self, '_infrastructure_error_occurred', False):
+                    logging.error('Infrastructure error (2003/2005): database unavailable: %s', e)
                 self._infrastructure_error_occurred = True
-                logging.error('Infrastructure error (2003/2005): database unavailable: %s', e)
                 raise
             
             error_msg = str(e).lower()
