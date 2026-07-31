@@ -21,21 +21,45 @@ class MySQLDatabase(PowerDNSMixIn, W2UIMixIn):
     Runs with autocommit on (not user-configurable), so every single-statement write persists on its own;
     only transaction() suspends autocommit to group statements and commit() them as a unit.
 
+    A statement whose cursor cannot open because the connection is gone (server restart, failover, wait_timeout)
+    reconnects once and runs on the new connection. A connection lost mid-statement and inside transaction() is not
+    retried, since the statements already run are lost with it.
+
     :param kwargs: mysql.connector connect arguments (database, user, password, host, port, unix_socket, ...).
     """
     Error = mysql.connector.Error
 
     def __init__(self, **kwargs: Any) -> None:
         kwargs['autocommit'] = True
-        # connect() returns MySQLConnection or CMySQLConnection (C-extension) when the connector ships it.
-        self._connection = cast(MySQLConnectionAbstract, mysql.connector.connect(**kwargs))
+        self._connect_kwargs = kwargs
+        self._connection = self._connect()
         self._last_insert_id = 0
+        self._in_transaction = False
+
+    def _connect(self) -> MySQLConnectionAbstract:
+        """Open a new connection with the stored connect arguments.
+
+        :returns: The new connection.
+        """
+        # connect() returns MySQLConnection or CMySQLConnection (C-extension) when the connector ships it.
+        return cast(MySQLConnectionAbstract, mysql.connector.connect(**self._connect_kwargs))
+
+    def _reconnect(self) -> None:
+        """Replace a connection the server closed while idle.
+
+        :raises mysql.connector.Error: When connecting again failed.
+        """
+        logging.warning('database connection lost, reconnecting')
+        with contextlib.suppress(mysql.connector.Error):
+            self._connection.close()  # the C extension re-raises a broken close as Error
+        self._connection = self._connect()
 
     def __enter__(self) -> Self:
         return self
 
     def __exit__(self, *_: Any) -> None:
-        self._connection.close()
+        with contextlib.suppress(mysql.connector.Error):
+            self._connection.close()  # the C extension re-raises a broken close as Error
 
     @staticmethod
     def join_operation(operation: str) -> str:
@@ -45,6 +69,24 @@ class MySQLDatabase(PowerDNSMixIn, W2UIMixIn):
         :returns: The statement as one line with surrounding whitespace stripped.
         """
         return ' '.join(filter(None, (line.strip() for line in operation.splitlines())))
+
+    def _open_cursor(self) -> Any:
+        """Open a buffered cursor, reconnecting once when the connection died while idle.
+
+        mysql.connector pings the server inside cursor(), so a session the server closed fails here.
+        A failure on a connection that still pings live is re-raised.
+
+        :returns: A buffered cursor on a live connection.
+        :raises mysql.connector.Error: When cursor() failed on a live connection, inside transaction(), or
+            reconnecting failed.
+        """
+        try:
+            return self._connection.cursor(buffered=True)
+        except mysql.connector.Error:
+            if self._in_transaction or self._connection.is_connected():
+                raise
+            self._reconnect()
+            return self._connection.cursor(buffered=True)
 
     @contextlib.contextmanager
     def _cursor(self, operation: str, params: tuple[Any, ...]) -> Iterator[Any]:
@@ -62,7 +104,7 @@ class MySQLDatabase(PowerDNSMixIn, W2UIMixIn):
         else:
             logging.debug('"%s"', operation)
 
-        cursor = self._connection.cursor(buffered=True)
+        cursor = self._open_cursor()
         try:
             cursor.execute(operation, self._unwrap_params(params))
             self._last_insert_id = cursor.lastrowid or 0
@@ -114,16 +156,23 @@ class MySQLDatabase(PowerDNSMixIn, W2UIMixIn):
         """Group every statement run inside the block into one committed transaction.
 
         Suspends autocommit for the block's duration and restores it in finally, so an exception cannot leave
-        the connection mid-transaction.
+        the connection mid-transaction. Suspending is itself a statement, so the connection is checked first.
+        A connection lost within a block is aborted rather than reconnected.
 
         :yields: None; the block runs its statements through the normal select and modify methods.
         """
+        if not self._connection.is_connected():
+            self._reconnect()
+
         self._connection.autocommit = False
+        self._in_transaction = True
         try:
             yield
             self._connection.commit()
         except Exception:
-            self._connection.rollback()
+            with contextlib.suppress(Exception):  # the C extension raises a raw MySQLInterfaceError
+                self._connection.rollback()
             raise
         finally:
+            self._in_transaction = False
             self._connection.autocommit = True

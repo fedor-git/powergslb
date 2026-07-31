@@ -743,6 +743,10 @@ is a boolean, and the rest are strings.
 The `[database]` is passed straight to `mysql.connector` as connect kwargs. When `unix_socket` is set it takes
 precedence over `host` / `port`.
 
+A connection the database closed while idle (server restart, failover, wait_timeout) is reconnected transparently
+on the next statement. A connection lost mid-statement fails the request instead of retrying it, and a transaction
+is aborted rather than resumed on a fresh connection.
+
 `[server]` and `[admin]` are served by the same HTTP engine, so they accept the same options. Both take
 `keep_alive_timeout` (the HTTP keep-alive idle timeout in seconds) and the same TLS set: `ssl` (bool) to enable HTTPS,
 `cert` (a PEM that may also bundle the private key), `key` (a separate key file when `cert` holds only the

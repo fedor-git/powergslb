@@ -23,6 +23,8 @@ tests/
 │   ├── conftest.py                     W2UIClient/DNSClient helpers and fixtures: base_url, admin_url, dns_addr,
 │   │                                   require_container (autouse), w2ui, dns, base_record, cleanup
 │   ├── test_admin.py                   admin HTTPS API: CRUD, search, sort, pagination, static files, malformed input
+│   ├── test_db_reconnect.py            transparent reconnect after MariaDB drops an idle keep-alive connection
+│   │                                   (needs POWERGSLB_CONTAINER)
 │   ├── test_dns_backend.py             DNS HTTP backend: record types, routing, headers, getAllDomains
 │   ├── test_dns_records.py             records via admin: disabled, views, geo, weight, routing policies, IPv6
 │   ├── test_ecs.py                     ECS scopeMask per answer row, plus the CLIENT-SUBNET option dig echoes
@@ -46,7 +48,8 @@ tests/
     │   ├── test_page.py                PageRequest.from_query: paging precedence, sort/search clause gates, wildcard
     │   ├── test_serialize.py           json_default: datetime rendering shared by the trail and the JSON responses
     │   └── mysql/
-    │       ├── test_database.py        MySQLDatabase: SQL flattener, context manager, autocommit/transaction, rows
+    │       ├── test_database.py        MySQLDatabase: SQL flattener, context manager, autocommit/transaction, rows,
+    │       │                           the one-shot reconnect when a statement finds the connection gone
     │       ├── test_masked.py          Masked: reprs as the mask, binds the real value
     │       ├── test_powerdns.py        PowerDNSMixIn SQL builders: gslb_checks/gslb_domains/gslb_records
     │       ├── test_tables.py          Table SQL/behavior: search/sort/paging, CRUD, records/users/status/audit
