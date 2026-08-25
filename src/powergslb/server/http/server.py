@@ -22,6 +22,7 @@ class HTTPServerManager(threading.Thread):
     :param database_config: mysql.connector connect kwargs.
     :param status_registry: Shared health status registry.
     :param handler: The request handler class this port serves; selects the DNS or admin surface.
+    :param jwt_config: Optional JWT configuration section for admin handler.
     :raises ValueError: When TLS is enabled without a certificate.
     """
 
@@ -30,6 +31,7 @@ class HTTPServerManager(threading.Thread):
                  database_config: dict[str, Any],
                  status_registry: StatusRegistry,
                  handler: type[HTTPRequestHandler],
+                 jwt_config: dict[str, Any] | None = None,
                  **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self.daemon = True
@@ -46,6 +48,7 @@ class HTTPServerManager(threading.Thread):
         self._database_config = database_config
         self._status_registry = status_registry
         self._handler = handler
+        self._jwt_config = jwt_config or {}
         self._lock = threading.Lock()
         self._stopping = False
         self._server: HTTPServer | None = None
@@ -53,11 +56,13 @@ class HTTPServerManager(threading.Thread):
     def run(self) -> None:
         """Bind the socket, wrap it in TLS when configured, and serve until shutdown() stops the server."""
         address = (self.address, self.port)
+        logging.debug("HTTPServerManager.run() passing jwt_config to handler: %s", self._jwt_config)
         handler = functools.partial(
             self._handler,
             directory=self.root,
             database_config=self._database_config,
             status_registry=self._status_registry,
+            jwt_config=self._jwt_config,
             timeout=self.keep_alive_timeout)
         server = _ThreadingHTTPServer(address, handler)  # binds the socket
         server.daemon_threads = True

@@ -34,10 +34,16 @@ class PowerGSLB:
         database = config.items('database')
         status = StatusRegistry()
         ViewRule.configure(config.items('geoip'))
+        
+        # Get JWT configuration if it exists (optional)
+        jwt_config = config.items('jwt') if 'jwt' in config._data else {}
+        logging.debug("JWT config from TOML: %s", jwt_config)
+        logging.debug("JWT config keys: %s", list(jwt_config.keys()) if jwt_config else "empty")
 
         service_threads: list[ServiceThread] = [
             MonitorManager(config.items('monitor'), database, status, name='Monitor'),
-            ServerManager(config.items('admin'), database, status, AdminRequestHandler, name='Admin'),
+            ServerManager(config.items('admin'), database, status, AdminRequestHandler, 
+                         jwt_config=jwt_config, name='Admin'),
             ServerManager(config.items('server'), database, status, PowerDNSRequestHandler, name='Server')
         ]
 

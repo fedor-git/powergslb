@@ -1,0 +1,73 @@
+# version: '3.8'
+
+services:
+  # MariaDB Database
+  mariadb:
+    image: mariadb:latest
+    container_name: powergslb_mariadb
+    hostname: mariadb
+    environment:
+      MARIADB_ROOT_PASSWORD: rootpassword
+      MARIADB_DATABASE: powergslb
+      MARIADB_USER: powergslb
+      MARIADB_PASSWORD: powergslb
+      TZ: ${TZ:-UTC}
+    ports:
+      - "${MARIADB_PORT:-3306}:3306/tcp"
+    volumes:
+      - ./database/scheme.sql:/docker-entrypoint-initdb.d/01-scheme.sql:ro
+      - ./database/data.sql:/docker-entrypoint-initdb.d/02-data.sql:ro
+      - powergslb_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mariadb-admin", "ping", "-h", "localhost"]
+      timeout: 5s
+      retries: 5
+      interval: 10s
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - powergslb_network
+
+  # PowerGSLB Application
+  powergslb:
+    build:
+      context: .
+      dockerfile: build/Dockerfile
+      args:
+        TZ: ${TZ:-UTC}
+    # image: powergslb:latest
+    container_name: powergslb_app
+    # depends_on:
+    #   mariadb:
+    #     condition: service_healthy
+    environment:
+      # Timezone
+      TZ: ${TZ:-UTC}
+      # Database (external MariaDB)
+      # POWERGSLB_DATABASE_HOST: mariadb
+      # POWERGSLB_DATABASE_PORT: "3306"
+      # POWERGSLB_DATABASE_USER: powergslb
+      # POWERGSLB_DATABASE_PASSWORD: powergslb
+      # POWERGSLB_DATABASE_DATABASE: powergslb
+      JWT_SECRET: dDWQ1qdmmcSw1dpP23xs
+      JWT_TTL: 86400
+    ports:
+      - "${ADMIN_WEB_PORT:-8444}:8443/tcp"
+    volumes:
+      - ./build/powergslb.toml:/etc/powergslb/powergslb.toml:ro
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - powergslb_network
+
+volumes:
+  powergslb_mysql_data:
+    driver: local
+
+networks:
+  powergslb_network:
+    driver: bridge
