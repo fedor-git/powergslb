@@ -82,7 +82,11 @@ class HTTPRequestHandler(SimpleHTTPRequestHandler, abc.ABC):
         self._set_remote_ip()
         self._urlsplit()
 
-        if self.dirs and self.dirs[0] == self.route:
+        # Check if path matches the route, OR if it's /login (which admin handler handles)
+        is_matching_route = self.dirs and self.dirs[0] == self.route
+        is_login_route = self.route == 'admin' and self.dirs and self.dirs[0] == 'login'
+        
+        if is_matching_route or is_login_route:
             self._handle_route()
         else:
             self.send_error(404)

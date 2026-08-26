@@ -43,7 +43,10 @@ class HTTPServerManager(threading.Thread):
         if self.ssl and not self.cert:
             raise ValueError('TLS is enabled but no certificate is configured')
         self.ciphers: str | None = server_config.get('ciphers')
-        self.root: str = server_config.get('root') or _default_root()
+        root_from_config = server_config.get('root')
+        logging.debug(f"HTTPServerManager: server_config keys={list(server_config.keys())}, root from config={root_from_config!r}")
+        self.root: str = root_from_config or _default_root()
+        logging.debug(f"HTTPServerManager: using root={self.root}")
         self.keep_alive_timeout: float = server_config.get('keep_alive_timeout', 300)
         self._database_config = database_config
         self._status_registry = status_registry

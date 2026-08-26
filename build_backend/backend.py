@@ -6,6 +6,7 @@ See https://setuptools.pypa.io/en/latest/build_meta.html
 """
 
 import gzip
+import os
 from pathlib import Path
 from typing import Any
 
@@ -18,7 +19,16 @@ _COMPRESSIBLE = {'.js', '.css', '.html', '.svg'}
 
 
 def _compress_admin_assets() -> None:
-    """Write a .gz and .br sibling next to every compressible admin asset."""
+    """Write a .gz and .br sibling next to every compressible admin asset.
+    
+    Skipped when DEVELOPMENT=true environment variable is set, allowing live editing
+    of uncompressed files during development.
+    """
+    # Check if we're in DEVELOPMENT mode - skip compression for live reload
+    if os.environ.get('DEVELOPMENT', '').lower() == 'true':
+        print('DEVELOPMENT mode enabled - skipping admin asset compression')
+        return
+    
     for path in list(_ASSET_ROOT.rglob('*')):
         if path.suffix not in _COMPRESSIBLE:
             continue

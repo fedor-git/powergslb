@@ -77,6 +77,12 @@ class AdminRequestHandler(HTTPRequestHandler):
         logging.debug("  args: %s", args)
         logging.debug("  kwargs keys: %s", list(kwargs.keys()))
         
+        # Check if we're in DEVELOPMENT mode - disable compression for live reload
+        development_mode = os.environ.get('DEVELOPMENT', '').lower() == 'true'
+        if development_mode:
+            logging.info("DEVELOPMENT mode enabled - disabling compression for static assets")
+            self._encodings = ()  # Disable all compression in dev mode
+        
         jwt_config = kwargs.get('jwt_config', {})
         logging.debug("  jwt_config in kwargs: %s", jwt_config)
         
@@ -121,14 +127,24 @@ class AdminRequestHandler(HTTPRequestHandler):
         self.close_connection = True
         logging.debug("_handle_route: close_connection set to True (prevent Keep-Alive buffer issues)")
         
-        # POST /admin/login - JWT login endpoint (no auth required)
-        if len(self.dirs) == 2 and self.dirs[1] == 'login':
-            logging.debug("Login route matched! command=%s", self.command)
-            if self.command == 'POST':
-                logging.debug("POST /admin/login - calling _handle_login()")
-                self._send_json_response(self._handle_login())
-            else:
-                self.send_error(405)  # Method Not Allowed
+        # Block direct access to /admin/login.html - redirect to /login
+        if self.path == '/admin/login.html':
+            logging.debug("Direct access to /admin/login.html blocked, redirecting to /login")
+            self.send_response(302)
+            self.send_header('Location', '/login')
+            self.send_header('Content-Length', '0')
+            self.end_headers()
+            return
+        
+        # GET /login - Login page (no auth required)
+        if self.path == '/login' and self.command == 'GET':
+            logging.debug("Login page route matched! Serving login.html")
+            self.path = '/admin/login.html'  # Rewrite path to serve login.html
+            SimpleHTTPRequestHandler.do_GET(self)
+        # POST /login - JWT login endpoint (no auth required)
+        elif self.path == '/login' and self.command == 'POST':
+            logging.debug("POST /login - calling _handle_login()")
+            self._send_json_response(self._handle_login())
         # GET requests (static files, login.html) - no auth required
         elif self.command == 'GET':
             SimpleHTTPRequestHandler.do_GET(self)
@@ -153,12 +169,19 @@ class AdminRequestHandler(HTTPRequestHandler):
         """Serve a static asset, preferring a precompressed sibling the client accepts.
 
         A resolved file or a directory index is served from here; everything else stays pure stdlib.
+        
+        In DEVELOPMENT mode (when _encodings is empty), always serve the identity (uncompressed) file.
 
         :returns: An open file object for the caller to stream and close, or None when nothing further remains.
         """
         path = self._static_file_path()
         if path is None:
             return super().send_head()
+
+        # DEVELOPMENT mode: _encodings is empty, always serve uncompressed
+        if not self._encodings:
+            logging.debug("DEVELOPMENT mode: serving uncompressed file %s", path)
+            return self._send_static_head(path, path, None)
 
         accepted = self._accepted_encodings()
         for encoding, suffix, _ in self._encodings:
@@ -367,7 +390,7 @@ class AdminRequestHandler(HTTPRequestHandler):
         """
         # For admin interface, redirect to login page instead of Basic Auth challenge
         # This allows both JWT and Basic Auth while providing a better user experience
-        login_url = '/admin/login.html'
+        login_url = '/login'
         self.send_response(302)  # Found (temporary redirect)
         self.send_header('Location', login_url)
         self.send_header('Content-Length', '0')

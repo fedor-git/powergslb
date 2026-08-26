@@ -43,6 +43,7 @@ services:
     environment:
       # Timezone
       TZ: ${TZ:-UTC}
+      DEVELOPMENT: true
       # Database (external MariaDB)
       # POWERGSLB_DATABASE_HOST: mariadb
       # POWERGSLB_DATABASE_PORT: "3306"
@@ -55,6 +56,7 @@ services:
       - "${ADMIN_WEB_PORT:-8444}:8443/tcp"
     volumes:
       - ./build/powergslb.toml:/etc/powergslb/powergslb.toml:ro
+      - ./src/powergslb/resources/admin:/app/src/powergslb/resources/admin
     restart: unless-stopped
     logging:
       driver: "json-file"

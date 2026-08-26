@@ -25,9 +25,21 @@ var toggleTheme = function () {
     localStorage.setItem(themeStorageKey, next);
 };
 
+var logoutToolbarItem = function () {
+    return {id: 'logout', type: 'button', caption: 'Logout', hint: 'Logout'};
+};
+
+var logoutToolbarClick = function () {
+    // Clear JWT token and redirect to login
+    localStorage.removeItem('powergslb_token');
+    window.location.href = '/login';
+};
+
 var themeToolbarClick = function (event) {
     if (event.target === 'theme') {
         toggleTheme();
+    } else if (event.target === 'logout') {
+        logoutToolbarClick();
     }
 };
 
@@ -295,7 +307,8 @@ var config = {
                     checked: false, hint: 'Auto reload data in the list'
                 },
                 {type: 'spacer'},
-                themeToolbarItem()
+                themeToolbarItem(),
+                logoutToolbarItem()
             ],
             onClick: function (event) {
                 if (event.target === 'reload') {
@@ -307,6 +320,8 @@ var config = {
                     }
                 } else if (event.target === 'theme') {
                     toggleTheme();
+                } else if (event.target === 'logout') {
+                    logoutToolbarClick();
                 }
             }
         },
@@ -608,7 +623,7 @@ var config = {
         sortData: [
             {field: 'recid', direction: 'desc'}
         ],
-        toolbar: {items: [{type: 'spacer'}, themeToolbarItem()], onClick: themeToolbarClick}
+        toolbar: {items: [{type: 'spacer'}, themeToolbarItem(), logoutToolbarItem()], onClick: themeToolbarClick}
     }
 };
 
@@ -655,7 +670,7 @@ Object.keys(textareaFields).forEach(function (name) {
         };
         grid.sortData = [{field: 'recid', direction: 'asc'}];
         grid.url = w2uiUrl;
-        grid.toolbar = {items: [{type: 'spacer'}, themeToolbarItem()], onClick: themeToolbarClick};
+        grid.toolbar = {items: [{type: 'spacer'}, themeToolbarItem(), logoutToolbarItem()], onClick: themeToolbarClick};
         grid.onAdd = gridPopupForm;
         grid.onDblClick = gridPopupForm;
         grid.onEdit = gridPopupForm;

@@ -503,3 +503,34 @@ html[data-theme="dark"] .pg-icon-theme:before {
 html[data-theme="dark"] .w2ui-toolbar table.w2ui-button .w2ui-tb-image > span.pg-icon-theme {
     color: var(--pg-text);
 }
+
+/* Logout toolbar button: red with white text. */
+.w2ui-toolbar table[onclick*="'logout'"] {
+    background-color: #f44336;
+    border-color: #e53935;
+}
+
+.w2ui-toolbar table[onclick*="'logout'"]:hover,
+.w2ui-toolbar table[onclick*="'logout'"].over {
+    background-color: #da190b;
+    border-color: #c81a0a;
+}
+
+.w2ui-toolbar table[onclick*="'logout'"] .w2ui-tb-caption {
+    color: white !important;
+}
+
+html[data-theme="dark"] .w2ui-toolbar table[onclick*="'logout'"] {
+    background-color: #d32f2f;
+    border-color: #b71c1c;
+}
+
+html[data-theme="dark"] .w2ui-toolbar table[onclick*="'logout'"]:hover,
+html[data-theme="dark"] .w2ui-toolbar table[onclick*="'logout'"].over {
+    background-color: #b71c1c;
+    border-color: #9e1313;
+}
+
+html[data-theme="dark"] .w2ui-toolbar table[onclick*="'logout'"] .w2ui-tb-caption {
+    color: white !important;
+}
