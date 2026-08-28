@@ -73,10 +73,6 @@ class AdminRequestHandler(HTTPRequestHandler):
         """
         import logging
         
-        logging.debug("AdminRequestHandler.__init__ called with:")
-        logging.debug("  args: %s", args)
-        logging.debug("  kwargs keys: %s", list(kwargs.keys()))
-        
         # Check if we're in DEVELOPMENT mode - disable compression for live reload
         development_mode = os.environ.get('DEVELOPMENT', '').lower() == 'true'
         if development_mode:
@@ -84,7 +80,6 @@ class AdminRequestHandler(HTTPRequestHandler):
             self._encodings = ()  # Disable all compression in dev mode
         
         jwt_config = kwargs.get('jwt_config', {})
-        logging.debug("  jwt_config in kwargs: %s", jwt_config)
         
         # Store jwt_config so HTTPRequestHandler can access it
         self.jwt_config: dict[str, Any] = jwt_config or {}
@@ -92,23 +87,14 @@ class AdminRequestHandler(HTTPRequestHandler):
         # Initialize JWT manager BEFORE super().__init__() because parent class
         # immediately processes the request and we need jwt_manager available
         try:
-            logging.debug("AdminRequestHandler: Initializing JWT manager BEFORE super().__init__()")
-            logging.debug("  jwt_config: %s", self.jwt_config)
-            logging.debug("  jwt_config keys: %s", list(self.jwt_config.keys()) if self.jwt_config else "empty dict")
             
             secret_key = self.jwt_config.get('secret')
-            logging.debug("  secret_key=%s, type=%s", secret_key, type(secret_key).__name__)
             
             if not secret_key:
-                logging.warning("JWT_SECRET_KEY not configured in [jwt] section of config")
-                logging.warning("Available keys in jwt_config: %s", list(self.jwt_config.keys()))
                 self.jwt_manager = None
-                logging.warning("Set jwt_manager=None because secret_key is empty")
             else:
                 ttl = self.jwt_config.get('ttl', 86400)
-                logging.debug("  ttl=%s, type=%s", ttl, type(ttl).__name__)
-                expiration_hours = ttl // 3600  # Convert seconds to hours
-                logging.debug("  creating JWTTokenManager with expiration_hours=%d", expiration_hours)
+                expiration_hours = ttl // 3600
                 self.jwt_manager = JWTTokenManager(secret_key, expiration_hours=expiration_hours)
                 logging.info("JWT token manager initialized with %d hour expiration BEFORE super().__init__()", expiration_hours)
         except Exception as e:
@@ -116,20 +102,14 @@ class AdminRequestHandler(HTTPRequestHandler):
             self.jwt_manager = None
         
         # NOW call super().__init__() - at this point jwt_manager is already initialized
-        logging.debug("AdminRequestHandler: Calling super().__init__() with jwt_manager=%s", self.jwt_manager)
         super().__init__(*args, **kwargs)
 
     def _handle_route(self) -> None:
         """Authenticate (if needed), then serve the login, w2ui CRUD endpoint, or fall through to static admin assets."""
-        logging.debug("_handle_route called: command=%s, path=%s, dirs=%s", self.command, self.path, self.dirs)
-        
-        # CRITICAL: Close connection after each request to prevent Keep-Alive buffer corruption
         self.close_connection = True
-        logging.debug("_handle_route: close_connection set to True (prevent Keep-Alive buffer issues)")
         
         # Block direct access to /admin/login.html - redirect to /login
         if self.path == '/admin/login.html':
-            logging.debug("Direct access to /admin/login.html blocked, redirecting to /login")
             self.send_response(302)
             self.send_header('Location', '/login')
             self.send_header('Content-Length', '0')
@@ -138,20 +118,12 @@ class AdminRequestHandler(HTTPRequestHandler):
         
         # GET /login - Login page (no auth required)
         if self.path == '/login' and self.command == 'GET':
-            logging.debug("Login page route matched! Serving login.html")
             self.path = '/admin/login.html'  # Rewrite path to serve login.html
             SimpleHTTPRequestHandler.do_GET(self)
         # POST /login - JWT login endpoint (no auth required)
         elif self.path == '/login' and self.command == 'POST':
-            logging.debug("POST /login - calling _handle_login()")
             self._send_json_response(self._handle_login())
-        # GET requests (static files, login.html) - no auth required
-        elif self.command == 'GET':
-            SimpleHTTPRequestHandler.do_GET(self)
-        # HEAD requests - no auth required
-        elif self.command == 'HEAD':
-            SimpleHTTPRequestHandler.do_HEAD(self)
-        # w2ui CRUD endpoint - auth required
+        # w2ui CRUD endpoint - auth required (MUST check BEFORE generic GET to avoid static file fallback)
         elif len(self.dirs) == 2 and self.dirs[1] == 'w2ui':
             if not self._is_authorized():
                 self._send_authenticate()
@@ -159,6 +131,12 @@ class AdminRequestHandler(HTTPRequestHandler):
                 self._send_content(self.content(), debug=self.command == 'GET')
             else:
                 self.send_error(404)
+        # GET requests (static files, login.html) - no auth required
+        elif self.command == 'GET':
+            SimpleHTTPRequestHandler.do_GET(self)
+        # HEAD requests - no auth required
+        elif self.command == 'HEAD':
+            SimpleHTTPRequestHandler.do_HEAD(self)
         # Everything else requires auth
         elif not self._is_authorized():
             self._send_authenticate()
@@ -180,7 +158,6 @@ class AdminRequestHandler(HTTPRequestHandler):
 
         # DEVELOPMENT mode: _encodings is empty, always serve uncompressed
         if not self._encodings:
-            logging.debug("DEVELOPMENT mode: serving uncompressed file %s", path)
             return self._send_static_head(path, path, None)
 
         accepted = self._accepted_encodings()
@@ -348,7 +325,6 @@ class AdminRequestHandler(HTTPRequestHandler):
         rows = self.database.check_user(user, password)
         if rows:
             self.user = UserContext(rows[0]['id'], rows[0]['user'], rows[0]['name'], self._client_ip())
-            logging.debug("user '%s' authorized via Basic Auth", user)
             return True
         else:
             logging.error("user '%s' not authorized", user)
@@ -361,12 +337,10 @@ class AdminRequestHandler(HTTPRequestHandler):
         :returns: True if token is valid, False otherwise.
         """
         if not self.jwt_manager:
-            logging.warning("JWT token manager not initialized")
             return False
 
         payload = self.jwt_manager.validate_token(token)
         if not payload:
-            logging.warning("Invalid or expired JWT token")
             return False
 
         try:
@@ -377,7 +351,6 @@ class AdminRequestHandler(HTTPRequestHandler):
                 name=payload['name'],
                 client_ip=self._client_ip()
             )
-            logging.debug("user '%s' authorized via JWT token", payload['username'])
             return True
         except KeyError as e:
             logging.error("Missing required field in JWT payload: %s", e)
@@ -391,11 +364,10 @@ class AdminRequestHandler(HTTPRequestHandler):
         # For admin interface, redirect to login page instead of Basic Auth challenge
         # This allows both JWT and Basic Auth while providing a better user experience
         login_url = '/login'
-        self.send_response(302)  # Found (temporary redirect)
+        self.send_response(302)
         self.send_header('Location', login_url)
         self.send_header('Content-Length', '0')
         self.end_headers()
-        logging.debug("Redirecting to %s for authentication", login_url)
 
     def _send_json_response(self, data: dict[str, Any], status_code: int = 200) -> None:
         """Send a JSON response with appropriate headers.
@@ -418,10 +390,6 @@ class AdminRequestHandler(HTTPRequestHandler):
 
         :returns: JSON response with token or error message.
         """
-        logging.debug("_handle_login CALLED: jwt_manager=%s (type: %s), jwt_config=%s, has secret=%s", 
-                     self.jwt_manager, type(self.jwt_manager).__name__, self.jwt_config, 
-                     bool(self.jwt_config.get('secret') if self.jwt_config else False))
-        logging.debug("_handle_login: jwt_manager=%s, jwt_config=%s", self.jwt_manager, self.jwt_config)
         if not self.jwt_manager:
             logging.error("JWT token manager is None! jwt_config=%s, secret=%s", 
                          self.jwt_config, self.jwt_config.get('secret') if self.jwt_config else 'N/A')
@@ -431,13 +399,9 @@ class AdminRequestHandler(HTTPRequestHandler):
             }
 
         try:
-            logging.debug("_handle_login: About to call _read_body()")
             self._read_body()
-            logging.debug("_handle_login: _read_body() completed, body length=%d", len(self.body) if hasattr(self, 'body') else 0)
             
-            logging.debug("_handle_login: About to parse JSON from body: %s", self.body[:100] if hasattr(self, 'body') else 'NO_BODY')
             login_data = json.loads(self.body.decode('utf-8'))
-            logging.debug("_handle_login: JSON parsed successfully: %s", login_data)
         except (json.JSONDecodeError, UnicodeDecodeError) as e:
             logging.error('Failed to parse login request: %s', e, exc_info=True)
             return {
@@ -447,7 +411,6 @@ class AdminRequestHandler(HTTPRequestHandler):
 
         username = login_data.get('username', '').strip()
         password = login_data.get('password', '')
-        logging.debug("_handle_login: username=%s, password_len=%d", username, len(password))
 
         if not username or not password:
             logging.warning("_handle_login: Missing username or password")
@@ -457,9 +420,7 @@ class AdminRequestHandler(HTTPRequestHandler):
             }
 
         # Verify credentials in database
-        logging.debug("_handle_login: About to check user credentials in database")
         rows = self.database.check_user(username, password)
-        logging.debug("_handle_login: Database check returned %d rows", len(rows) if rows else 0)
         if not rows:
             logging.warning("Failed login attempt for user '%s' from %s", username, self._client_ip())
             return {
@@ -468,17 +429,14 @@ class AdminRequestHandler(HTTPRequestHandler):
             }
 
         user_data = rows[0]
-        logging.debug("_handle_login: user_data keys=%s", list(user_data.keys()))
         
         try:
             # Generate JWT token
-            logging.debug("_handle_login: About to generate JWT token")
             token = self.jwt_manager.generate_token(
                 user_id=user_data['id'],
                 username=user_data['user'],
                 name=user_data['name']
             )
-            logging.debug("_handle_login: JWT token generated successfully, token_len=%d", len(token))
             
             logging.info("User '%s' logged in successfully from %s", username, self._client_ip())
             
@@ -508,12 +466,16 @@ class AdminRequestHandler(HTTPRequestHandler):
         """
         data = self.query.get('data')
         selected = self.query.get('selected')
+        
         if not isinstance(selected, list):
             selected = [selected]
 
         assert self.user is not None
+        
         if not self.database.delete_data(data, selected, self.user):
+            logging.error("_delete_records: Failed to delete records from '%s'", data)
             return {'status': 'error', 'message': 'records not deleted'}
+        
         return {'status': 'success'}
 
     def _get_data(self, data: Any, recid: int = 0,
@@ -532,12 +494,22 @@ class AdminRequestHandler(HTTPRequestHandler):
     def _get_items(self) -> dict[str, Any]:
         """Handle the get-items command: collect one field's values from the database for a combo dropdown.
 
+        For users table, returns list of {id, text} objects so combo can store numeric ID and display username.
+        For other tables, returns simple list of field values.
+
         :returns: The w2ui reply with the collected items.
         """
         data = self.query.get('data')
         field = self.query.get('field')
         records, _ = self._get_data(data, page=PageRequest.from_query(self.query))
-        items = [record.get(field) for record in records if record.get(field) is not None]
+        
+        # For users table, return {id, text} format for proper ID storage
+        if data == 'users' and field == 'user':
+            items = [{'id': record.get('recid'), 'text': record.get(field)} 
+                     for record in records if record.get(field) is not None]
+        else:
+            items = [record.get(field) for record in records if record.get(field) is not None]
+        
         return {'status': 'success', 'items': items}
 
     def _get_record(self) -> dict[str, Any]:
@@ -551,7 +523,11 @@ class AdminRequestHandler(HTTPRequestHandler):
         records, _ = self._get_data(data, recid)
         if not records:
             return {'status': 'error', 'message': f"get-record '{data}' id {recid} not found"}
-        return {'status': 'success', 'record': records[0]}
+        
+        record = records[0]
+        # No field renaming needed - use user_id consistently
+        
+        return {'status': 'success', 'record': record}
 
     def _get_records(self) -> dict[str, Any]:
         """Handle the get-records command: read the database records searched, sorted and paged in SQL.
@@ -568,20 +544,25 @@ class AdminRequestHandler(HTTPRequestHandler):
         """Parse the query string (GET) or request body (POST) into self.query; a parse error yields an empty query."""
         try:
             if self.query:
-                logging.debug("_parse_query: Parsing GET query string: %s", self.query)
                 self.query = parse_query(self.query)
             elif self.body:
                 body_str = self.body.decode('utf-8')
-                logging.debug("_parse_query: Parsing POST body (%d bytes): %s", len(self.body), body_str[:200])
-                self.query = parse_query(body_str)
+                
+                content_type = self.headers.get('Content-Type', '').lower()
+                if 'application/json' in content_type:
+                    try:
+                        self.query = json.loads(body_str)
+                    except json.JSONDecodeError as e:
+                        logging.error('JSON parse error: %s', e)
+                        self.query = {}
+                else:
+                    self.query = parse_query(body_str)
             else:
                 logging.warning("_parse_query: No query string or body to parse!")
                 self.query = {}
         except QueryParserError as e:
             logging.error('query parse error: %s', e)
             self.query = {}
-
-        logging.debug('query: %s', self._masked_query())
 
     def _masked_query(self) -> Any:
         """Return the query with any posted record password masked for safe logging.
@@ -597,6 +578,8 @@ class AdminRequestHandler(HTTPRequestHandler):
         """Handle the save-record command: validate the posted record, then insert or update it.
 
         An invalid record is rejected before the write. Requires an authorized request (self.user set).
+        
+        Special handling for jwt_tokens: if user_id is a username string, lookup the user ID.
 
         :returns: The w2ui status reply.
         """
@@ -606,10 +589,36 @@ class AdminRequestHandler(HTTPRequestHandler):
 
         self._validate_record(data, record)
 
+        # Special handling: for jwt_tokens, if user_id is a non-numeric string, lookup the user ID
+        if data == 'jwt_tokens' and isinstance(record.get('user_id'), str):
+            user_id_str = record['user_id'].strip()
+            # Check if it's a numeric ID already
+            if not user_id_str.isdigit():
+                # It's a username, lookup the user ID
+                users_data, _ = self._get_data('users', page=PageRequest())
+                user_found = None
+                for user in users_data:
+                    if user.get('user') == user_id_str:
+                        user_found = user.get('recid')
+                        break
+                if user_found is None:
+                    raise ValueError(f"User '{user_id_str}' not found")
+                record['user_id'] = user_found
+
         assert self.user is not None
-        if not self.database.save_data(data, recid, self.user, **record):
-            return {'status': 'error', 'message': 'record not changed'}
-        return {'status': 'success'}
+        try:
+            result = self.database.save_data(data, recid, self.user, **record)
+            # For jwt_tokens, accept 0 rows affected as success (record unchanged)
+            # MySQL returns 0 when UPDATE doesn't actually change any values
+            if data == 'jwt_tokens':
+                return {'status': 'success'}
+            # For other tables, treat 0 as error  (record not changed)
+            if not result:
+                return {'status': 'error', 'message': 'record not changed'}
+            return {'status': 'success'}
+        except Exception as e:
+            logging.error(f"JWT Token save: ERROR in save_data: {type(e).__name__}: {e}", exc_info=True)
+            raise
 
     @staticmethod
     def _validate_record(data: Any, record: dict[str, Any]) -> None:
@@ -628,6 +637,31 @@ class AdminRequestHandler(HTTPRequestHandler):
 
         elif data == 'views':
             ViewRule.resolve(record['rule'])
+        
+        elif data == 'jwt_tokens':
+            # Validate jwt_tokens record
+            expires_at = record.get('expires_at', '')
+            
+            # Handle various input types
+            if expires_at is None:
+                expires_at = ''
+            elif not isinstance(expires_at, str):
+                expires_at = str(expires_at).strip()
+            else:
+                expires_at = expires_at.strip()
+            
+            # Validate format if not empty
+            if expires_at:
+                try:
+                    from datetime import datetime
+                    # Try YYYY-MM-DD HH:MM:SS format first
+                    if ' ' in expires_at:
+                        datetime.strptime(expires_at, '%Y-%m-%d %H:%M:%S')
+                    else:
+                        # Try YYYY-MM-DD format
+                        datetime.strptime(expires_at, '%Y-%m-%d')
+                except (ValueError, TypeError) as e:
+                    raise ValueError("Expires At must be in YYYY-MM-DD or YYYY-MM-DD HH:MM:SS format or empty")
 
     @staticmethod
     def _style_status(records: list[dict[str, Any]]) -> None:

@@ -91,6 +91,25 @@ CREATE TABLE `records` (
   CONSTRAINT `records_views_id_fk` FOREIGN KEY (`view_id`) REFERENCES `views` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- API authentication tokens for programmatic access.
+-- Tokens can have optional expiration; NULL expires_at means the token never expires.
+-- last_used is updated each time the token is successfully authenticated.
+CREATE TABLE `jwt_tokens` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `token` varchar(512) NOT NULL,
+  `name` varchar(255) NOT NULL,
+  `user_id` int NOT NULL,
+  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  `expires_at` datetime DEFAULT NULL,
+  `last_used` datetime DEFAULT NULL,
+  `enabled` tinyint(1) NOT NULL DEFAULT 1,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `jwt_tokens_token_uindex` (`token`),
+  KEY `jwt_tokens_user_id_index` (`user_id`),
+  KEY `jwt_tokens_expires_at_index` (`expires_at`),
+  CONSTRAINT `jwt_tokens_users_id_fk` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- Append-only trail of admin writes: one row per record.
 -- user is the login string, not an FK, so the trail survives user deletion or rename.
 CREATE TABLE `audit` (

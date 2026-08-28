@@ -1,5 +1,6 @@
 """Database tables: each read/write surface owns its SQL and runs it through a passed-in executor."""
 
+import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, timedelta
@@ -10,8 +11,8 @@ from powergslb.database.mysql.masked import Masked
 from powergslb.database.page import PageRequest, SearchClause
 from powergslb.system.password import hash_password, verify_password
 
-__all__ = ['Selector', 'Executor', 'Table', 'AuditRow',
-           'AUDIT', 'DOMAINS', 'MONITORS', 'RECORDS', 'ROUTINGS', 'STATUS', 'TYPES', 'USERS', 'VIEWS', 'TABLES']
+__all__ = ['Selector', 'Executor', 'Table', 'AuditRow', 'JWTTokenRow',
+           'AUDIT', 'DOMAINS', 'JWT_TOKENS', 'MONITORS', 'RECORDS', 'ROUTINGS', 'STATUS', 'TYPES', 'USERS', 'VIEWS', 'TABLES']
 
 
 class Selector(Protocol):
@@ -450,6 +451,257 @@ class Audit(Table):
         raise ValueError('audit is read-only')
 
 
+class JWTTokenRow(NamedTuple):
+    """One JWT token row, in the JWT_TOKENS.columns bind order.
+
+    :param token: The JWT token string (usually base64 encoded).
+    :param name: Human-readable name for the token (e.g., 'CI Token', 'API Key').
+    :param user_id: The user ID this token belongs to.
+    :param expires_at: When the token expires; NULL means no expiration.
+    :param enabled: Whether the token is currently active.
+    """
+    token: str
+    name: str
+    user_id: int
+    expires_at: str | None
+    enabled: int
+
+
+class JWTTokens(Table):
+    """The JWT tokens admin table: API authentication tokens for programmatic access.
+
+    Supports creating, reading, updating, and deleting tokens. Tokens can have optional expiration dates.
+    Includes userName from the users table via a LEFT JOIN.
+    """
+
+    def get(self, db: Selector, recid: int = 0, page: PageRequest | None = None, **kwargs: Any) -> tuple[list[dict[str, Any]], int]:
+        """Get JWT tokens with usernames joined from users table.
+        
+        :param db: The executor to run the queries on.
+        :param recid: The key value to fetch; 0 fetches every row.
+        :param page: The search/sort/paging request; None returns every matching row.
+        :param kwargs: Extra arguments a subclass may consume.
+        :returns: The matching rows (with renamed user_id → userID and userName added) and the total match count.
+        """
+        # Build the JOIN query with usernames
+        if recid:
+            operation = f"""
+                SELECT 
+                    t.id AS recid,
+                    t.token,
+                    t.name,
+                    t.user_id AS userID,
+                    COALESCE(u.user, '') AS userName,
+                    t.created_at,
+                    t.expires_at,
+                    t.last_used,
+                    t.enabled
+                FROM `{self.name}` t
+                LEFT JOIN `users` u ON t.user_id = u.id
+                WHERE t.id = %s
+            """
+        else:
+            operation = f"""
+                SELECT 
+                    t.id AS recid,
+                    t.token,
+                    t.name,
+                    t.user_id AS userID,
+                    COALESCE(u.user, '') AS userName,
+                    t.created_at,
+                    t.expires_at,
+                    t.last_used,
+                    t.enabled
+                FROM `{self.name}` t
+                LEFT JOIN `users` u ON t.user_id = u.id
+            """
+        
+        params: tuple[Any, ...] = (recid,) if recid else ()
+        return self._read(db, operation, params, page)
+
+    def save(self, db: Executor, save_recid: int, **fields: Any) -> int:
+        """Insert or update a JWT token row.
+
+        When inserting a new token (save_recid=0), generates a random token if not provided.
+        When updating, regenerate token only if expires_at changed; otherwise preserve existing token.
+
+        :param db: The executor to run the statement on.
+        :param save_recid: The token id to update; 0 inserts a new token.
+        :param fields: The posted record: token, name, user_id, expires_at, enabled.
+        :returns: The number of rows affected.
+        """
+        import secrets  # Generate cryptographic random tokens
+        
+        logging.debug(f"JWTTokens.save() called: save_recid={save_recid}, fields={fields}")
+        
+        # Token: generate if inserting and no token provided
+        token = fields.get('token', '')
+        regenerate_token = False
+        
+        if not save_recid:
+            # INSERT: generate new token if not provided
+            if not token:
+                token = secrets.token_hex(64)
+        else:
+            # UPDATE: check if expires_at changed to decide if we need to regenerate token
+            # Fetch current record to compare expires_at
+            operation = f"SELECT expires_at FROM `{self.name}` WHERE id = %s"
+            result = db.select(operation, (save_recid,))
+            old_expires_at = result[0]['expires_at'] if result else None
+            
+            new_expires_at = fields.get('expires_at')
+            
+            logging.info(f"🔴 JWTTokens UPDATE check: recid={save_recid}")
+            logging.info(f"   old_expires_at={repr(old_expires_at)} (type={type(old_expires_at).__name__})")
+            logging.info(f"   new_expires_at={repr(new_expires_at)} (type={type(new_expires_at).__name__})")
+            
+            # 🔧 If expires_at is empty/not provided in the update, it means user didn't change it
+            # Keep the old value to avoid regenerating token
+            if new_expires_at == '' or new_expires_at is None:
+                new_expires_at = old_expires_at  # Keep the old value, don't trigger regen
+            else:
+                # ✅ FIX: Convert string to datetime for proper comparison
+                # Form sends string like '2026-08-31 00:00:00', DB has datetime object
+                if isinstance(new_expires_at, str) and old_expires_at is not None:
+                    from datetime import datetime as dt
+                    try:
+                        # Parse string to datetime for comparison
+                        new_expires_at_dt = dt.strptime(new_expires_at, '%Y-%m-%d %H:%M:%S')
+                        logging.info(f"   → Converted string to datetime: {repr(new_expires_at_dt)}")
+                        # Compare as datetime objects
+                        if old_expires_at == new_expires_at_dt:
+                            # They're equal! Don't regenerate token
+                            logging.info(f"   → ✅ expires_at UNCHANGED (after conversion), keeping old token")
+                            token = None
+                            new_expires_at = old_expires_at  # Keep old value for INSERT/UPDATE
+                            regenerate_token = False
+                        else:
+                            # They differ, regenerate token
+                            logging.info(f"   → 🆕 expires_at CHANGED, regenerating token")
+                            regenerate_token = True
+                            token = secrets.token_hex(64)
+                    except Exception as e:
+                        logging.error(f"   → Error parsing datetime: {e}")
+                        regenerate_token = True
+                        token = secrets.token_hex(64)
+                else:
+                    # No conversion needed, use direct comparison
+                    if old_expires_at != new_expires_at:
+                        regenerate_token = True
+                        token = secrets.token_hex(64)
+                        logging.info(f"   → 🆕 expires_at CHANGED, regenerating token")
+                    else:
+                        token = None
+                        logging.info(f"   → ✅ expires_at UNCHANGED, keeping old token")
+        
+        name = fields.get('name', '')
+        
+        # Convert user_id to int
+        user_id_val = fields.get('user_id', 0)
+        if isinstance(user_id_val, int):
+            user_id = user_id_val
+        elif isinstance(user_id_val, str):
+            try:
+                user_id = int(user_id_val) if user_id_val else 0
+            except ValueError:
+                # If string but not numeric, it's already been converted by _save_record
+                raise ValueError(f"Invalid user_id: {user_id_val}")
+        else:
+            user_id = int(user_id_val) if user_id_val else 0
+        
+        # Handle expires_at: empty string or None becomes NULL
+        expires_at = fields.get('expires_at')
+        if expires_at == '' or expires_at is None:
+            expires_at = None
+        # If it's a non-empty string, keep it (validation already done in _validate_record)
+        
+        # Convert enabled to int: checkbox sends true/false, 'on'/'', or True/False
+        enabled_val = fields.get('enabled', 1)
+        if isinstance(enabled_val, bool):
+            enabled = 1 if enabled_val else 0
+        elif isinstance(enabled_val, str):
+            enabled = 1 if enabled_val.lower() in ('true', 'on', '1', 'yes') else 0
+        else:
+            enabled = int(enabled_val) if enabled_val else 0
+
+        if not save_recid:
+            # INSERT: all columns including token
+            logging.info(f"🟢 JWTTokens INSERT: token={token[:20]}..., name={name}, user_id={user_id}, expires_at={expires_at}, enabled={enabled}")
+            return db.modify(
+                self._insert,
+                (token, name, user_id, expires_at, enabled)
+            )
+
+        # UPDATE: conditionally include token if regenerated
+        if regenerate_token and token:
+            # expires_at changed, regenerate token
+            sql = self._update_of(('token', 'name', 'user_id', 'expires_at', 'enabled'))
+            params = (token, name, user_id, expires_at, enabled, save_recid)
+            logging.info(f"🔴 JWTTokens UPDATE with NEW token: {token[:20]}...")
+            affected = db.modify(sql, params)
+            logging.info(f"   Affected rows: {affected}")
+            return affected
+        else:
+            # expires_at didn't change, exclude token (keep old one)
+            sql = self._update_of(('name', 'user_id', 'expires_at', 'enabled'))
+            params = (name, user_id, expires_at, enabled, save_recid)
+            logging.info(f"✅ JWTTokens UPDATE WITHOUT token (keeping old): only name/user_id/expires_at/enabled")
+            affected = db.modify(sql, params)
+            logging.info(f"   Affected rows: {affected}")
+            return affected
+
+    def get_active_tokens(self, db: Selector, user_id: int) -> list[dict[str, Any]]:
+        """Get all active tokens for a user (not expired and enabled).
+
+        :param db: The executor to run the query on.
+        :param user_id: The user ID to fetch tokens for.
+        :returns: List of active token records.
+        """
+        query = f'''
+            SELECT `recid`, `token`, `name`, `user_id`, `created_at`, `expires_at`, `last_used`, `enabled`
+            FROM `{self.name}`
+            WHERE `user_id` = %s AND `enabled` = 1
+            AND (expires_at IS NULL OR expires_at > NOW())
+            ORDER BY `created_at` DESC
+        '''
+        return db.select(query, (user_id,))
+
+    def check_token(self, db: Selector, token: str) -> list[dict[str, Any]]:
+        """Check if a token is valid (exists, enabled, not expired).
+
+        :param db: The executor to run the query on.
+        :param token: The token string to validate.
+        :returns: [{ id, user_id, name, ... }] if valid, empty list otherwise.
+        """
+        query = f'''
+            SELECT `id`, `token`, `name`, `user_id`, `created_at`, `expires_at`, `last_used`, `enabled`
+            FROM `{self.name}`
+            WHERE `token` = %s AND `enabled` = 1
+            AND (expires_at IS NULL OR expires_at > NOW())
+        '''
+        return db.select(query, (token,))
+
+    def update_last_used(self, db: Executor, token_id: int) -> int:
+        """Update the last_used timestamp for a token.
+
+        :param db: The executor to run the statement on.
+        :param token_id: The token ID to update.
+        :returns: The number of rows affected.
+        """
+        query = f'UPDATE `{self.name}` SET `last_used` = NOW() WHERE `id` = %s'
+        return db.modify(query, (token_id,))
+
+    def revoke_token(self, db: Executor, token_id: int) -> int:
+        """Revoke a token by disabling it.
+
+        :param db: The executor to run the statement on.
+        :param token_id: The token ID to revoke.
+        :returns: The number of rows affected.
+        """
+        query = f'UPDATE `{self.name}` SET `enabled` = 0 WHERE `id` = %s'
+        return db.modify(query, (token_id,))
+
+
 class Records(Table):
     """The records admin table: reads the records, writes the rrset and record as two statements.
 
@@ -808,6 +1060,13 @@ USERS = Users(
     columns=('user', 'name', 'password')
 )
 
+JWT_TOKENS = JWTTokens(
+    name='jwt_tokens',
+    fields=('recid', 'token', 'name', 'userID', 'userName', 'created_at', 'expires_at', 'last_used', 'enabled'),
+    columns=('token', 'name', 'user_id', 'expires_at', 'enabled'),
+    aliases={'userID': 'user_id'}
+)
+
 VIEWS = Table(
     name='views',
     fields=('recid', 'view', 'rule'),
@@ -818,6 +1077,7 @@ VIEWS = Table(
 TABLES: Mapping[str, Table] = MappingProxyType({
     'audit': AUDIT,
     'domains': DOMAINS,
+    'jwt_tokens': JWT_TOKENS,
     'monitors': MONITORS,
     'records': RECORDS,
     'routings': ROUTINGS,
