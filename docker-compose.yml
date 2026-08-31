@@ -57,6 +57,7 @@ services:
     volumes:
       - ./build/powergslb.toml:/etc/powergslb/powergslb.toml:ro
       - ./src/powergslb/resources/admin:/app/src/powergslb/resources/admin
+      - ./src/powergslb/resources/public:/app/src/powergslb/resources/public
     restart: unless-stopped
     logging:
       driver: "json-file"

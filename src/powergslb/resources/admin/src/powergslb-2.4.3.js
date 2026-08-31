@@ -21,97 +21,71 @@ const toggleTheme = () => {
 };
 
 const logoutToolbarClick = () => {
-    localStorage.removeItem('powergslb_token');
-    window.location.href = '/login';
+    // Logout: send DELETE request to server to clear HTTP-only cookie
+    fetch('/logout', { 
+        method: 'DELETE',
+        credentials: 'include'
+    })
+    .then(() => {
+        window.location.href = '/login';
+    })
+    .catch(err => {
+        console.error('Logout failed:', err);
+        window.location.href = '/login';
+    });
 };
 
 const themeToolbarClick = (event) => {
-    if (event.target === 'theme') toggleTheme();
-    if (event.target === 'logout') logoutToolbarClick();
+    const targetId = event.detail?.item?.id || event.target;
+
+    if (targetId === 'theme') toggleTheme();
+    if (targetId === 'logout') logoutToolbarClick();
 };
 
 // ====================================================
-// Global Request Interceptors for JWT Token
+// Request handling
 // ====================================================
 
-const tokenCheck = localStorage.getItem('powergslb_token');
+// Note: HTTP-only cookies are automatically sent by the browser
+// with all requests (GET, POST, etc.) so no need to manually add
+// Authorization header with Bearer token.
 
-const originalXHROpen = XMLHttpRequest.prototype.open;
-XMLHttpRequest.prototype.open = function(method, url, ...rest) {
-    this._powerGSLBUrl = url;
-    this._powerGSLBMethod = method;
-    return originalXHROpen.apply(this, [method, url, ...rest]);
-};
 
-const originalXHRSend = XMLHttpRequest.prototype.send;
-XMLHttpRequest.prototype.send = function(data) {
-    const token = localStorage.getItem('powergslb_token');
-    const url = this._powerGSLBUrl;
-    
-    if (token && url && (url.startsWith('/') || url.includes('localhost'))) {
-        this.setRequestHeader('Authorization', `Bearer ${token}`);
-    }
-    
-    return originalXHRSend.apply(this, [data]);
-};
+// ====================================================
+// Auto Reload Management for Status Grid
+// ====================================================
 
-let currentGridDataType = null;
+let reloadIntervalId = 0;
+const reloadInterval = 5000; // 5 seconds
 
-const originalFetch = window.fetch;
-window.fetch = function(...args) {
-    const [resource, config] = args;
-    const resourceUrl = (typeof resource === 'string') ? resource : (resource?.url || String(resource));
-    const resourceMethod = (typeof resource === 'string') ? (config?.method || 'GET') : (resource?.method || 'GET');
-    
-    const isSameOrigin = resourceUrl.startsWith('/') || resourceUrl.includes(window.location.host);
-    const isAdminWui = resourceUrl.includes('/admin/w2ui');
-    
-    if (isSameOrigin && isAdminWui) {
-        const token = localStorage.getItem('powergslb_token');
-        if (token) {
-            if (resourceMethod === 'GET' && currentGridDataType) {
-                const urlObj = new URL(resourceUrl, window.location.origin);
-                const requestParam = urlObj.searchParams.get('request');
-                
-                const params = new URLSearchParams();
-                params.set('cmd', 'get-records');
-                params.set('data', currentGridDataType);
-                
-                if (requestParam) {
-                    try {
-                        const req = JSON.parse(requestParam);
-                        if (req.limit) params.set('limit', req.limit);
-                        if (req.offset) params.set('offset', req.offset);
-                        if (req.action === 'get' && req.recid) {
-                            params.set('recid', req.recid);
-                        }
-                    } catch (e) {
-                        console.warn('Could not parse w2ui request param:', e);
-                    }
-                }
-                
-                const baseUrl = resourceUrl.split('?')[0];
-                const newRequest = new Request(baseUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': 'Bearer ' + token,
-                        'Content-Type': 'application/x-www-form-urlencoded'
-                    },
-                    body: params.toString()
-                });
-                
-                return originalFetch.call(window, newRequest);
+const startAutoReload = function () {
+    if (reloadIntervalId === 0) {
+        reloadIntervalId = setInterval(function () {
+            if (w2ui.gridStatus) {
+                w2ui.gridStatus.reload();
             }
-            
-            const fetchConfig = config || {};
-            if (!fetchConfig.headers) fetchConfig.headers = {};
-            fetchConfig.headers['Authorization'] = `Bearer ${token}`;
-            args[1] = fetchConfig;
+        }, reloadInterval);
+        if (w2ui.gridStatus && w2ui.gridStatus.toolbar) {
+            w2ui.gridStatus.toolbar.check('reload');
+        }
+        if (w2ui.gridStatus) {
+            w2ui.gridStatus.reload();
         }
     }
-    
-    return originalFetch.apply(this, args);
 };
+
+const stopAutoReload = function () {
+    if (reloadIntervalId !== 0) {
+        clearInterval(reloadIntervalId);
+        reloadIntervalId = 0;
+        if (w2ui.gridStatus && w2ui.gridStatus.toolbar) {
+            w2ui.gridStatus.toolbar.uncheck('reload');
+        }
+    }
+};
+
+// Note: HTTP-only cookies are automatically sent by the browser with all requests.
+
 
 // ====================================================
 // Response Format Transformer for w2ui 2.0 (Grids & Lists)
@@ -147,7 +121,7 @@ Response.prototype.json = function() {
 
 const w2uiUrl = '/admin/w2ui';
 
-// Custom date/time picker styled for w2ui 2.0
+// Custom date/time picker styled for w2ui 2.0 (Clean HTML)
 function openDateTimePicker(inputElement, form = null) {
     const currentValue = inputElement.value || '';
     const [currentDate, currentTime] = currentValue.split(' ');
@@ -159,36 +133,22 @@ function openDateTimePicker(inputElement, form = null) {
     const [hours, mins] = currentTime ? currentTime.split(':') : ['00', '00'];
 
     const overlay = document.createElement('div');
-    overlay.style.cssText = `
-        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-        background: rgba(0, 0, 0, 0.4); z-index: 10000;
-        display: flex; align-items: center; justify-content: center;
-    `;
+    overlay.className = 'custom-dt-overlay';
     overlay.setAttribute('tabindex', '0');
 
     const modal = document.createElement('div');
-    modal.style.cssText = `
-        background: var(--w2ui-background-color, #ffffff);
-        border: 1px solid var(--w2ui-popup-border, #dfdfdf);
-        border-radius: 4px;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-        width: 300px; 
-        overflow: hidden;
-        font-family: var(--w2ui-font-family, verdana, arial, sans-serif);
-        font-size: var(--w2ui-font-size, 12px);
-        color: var(--w2ui-color, #000000);
-    `;
+    modal.className = 'custom-dt-modal';
 
     modal.innerHTML = `
-        <div style="padding: 10px; background: var(--w2ui-popup-title-bg, #f3f6fa); border-bottom: 1px solid var(--w2ui-popup-border, #dfdfdf); font-weight: bold; text-align: center; color: var(--w2ui-popup-title-color, #000);">
+        <div class="custom-dt-title">
             Select Date & Time
         </div>
         
-        <div style="padding: 20px 15px; display: flex; flex-direction: column; gap: 15px;">
-            <div style="display: flex; align-items: center;">
-                <label style="width: 80px; text-align: right; padding-right: 10px; margin: 0; color: var(--w2ui-color);">Year:</label>
-                <div style="flex: 1;">
-                    <select class="w2ui-input" id="picker-year" style="width: 100%; box-sizing: border-box; height: 30px;">
+        <div class="custom-dt-body">
+            <div class="custom-dt-row">
+                <label class="custom-dt-label">Year:</label>
+                <div class="custom-dt-input-wrap">
+                    <select class="w2ui-input" id="picker-year" style="width: 100%; height: 30px;">
                         ${Array.from({length: 31}, (_, i) => 2026 + i)
                             .map(y => `<option value="${y}" ${y === parseInt(year) ? 'selected' : ''}>${y}</option>`)
                             .join('')}
@@ -196,10 +156,10 @@ function openDateTimePicker(inputElement, form = null) {
                 </div>
             </div>
             
-            <div style="display: flex; align-items: center;">
-                <label style="width: 80px; text-align: right; padding-right: 10px; margin: 0; color: var(--w2ui-color);">Month:</label>
-                <div style="flex: 1;">
-                    <select class="w2ui-input" id="picker-month" style="width: 100%; box-sizing: border-box; height: 30px;">
+            <div class="custom-dt-row">
+                <label class="custom-dt-label">Month:</label>
+                <div class="custom-dt-input-wrap">
+                    <select class="w2ui-input" id="picker-month" style="width: 100%; height: 30px;">
                         ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
                             .map((m, i) => `<option value="${String(i + 1).padStart(2, '0')}" ${(i + 1) === parseInt(month) ? 'selected' : ''}>${m}</option>`)
                             .join('')}
@@ -207,10 +167,10 @@ function openDateTimePicker(inputElement, form = null) {
                 </div>
             </div>
             
-            <div style="display: flex; align-items: center;">
-                <label style="width: 80px; text-align: right; padding-right: 10px; margin: 0; color: var(--w2ui-color);">Day:</label>
-                <div style="flex: 1;">
-                    <select class="w2ui-input" id="picker-day" style="width: 100%; box-sizing: border-box; height: 30px;">
+            <div class="custom-dt-row">
+                <label class="custom-dt-label">Day:</label>
+                <div class="custom-dt-input-wrap">
+                    <select class="w2ui-input" id="picker-day" style="width: 100%; height: 30px;">
                         ${Array.from({length: 31}, (_, i) => i + 1)
                             .map(d => `<option value="${String(d).padStart(2, '0')}" ${d === parseInt(day) ? 'selected' : ''}>${d}</option>`)
                             .join('')}
@@ -218,16 +178,16 @@ function openDateTimePicker(inputElement, form = null) {
                 </div>
             </div>
             
-            <div style="display: flex; align-items: center;">
-                <label style="width: 80px; text-align: right; padding-right: 10px; margin: 0; color: var(--w2ui-color);">Time:</label>
-                <div style="flex: 1; display: flex; gap: 5px; align-items: center;">
-                    <select class="w2ui-input" id="picker-hour" style="flex: 1; box-sizing: border-box; height: 30px;">
+            <div class="custom-dt-row">
+                <label class="custom-dt-label">Time:</label>
+                <div class="custom-dt-time-wrap">
+                    <select class="w2ui-input" id="picker-hour" style="flex: 1; height: 30px;">
                         ${Array.from({length: 24}, (_, i) => String(i).padStart(2, '0'))
                             .map(h => `<option value="${h}" ${h === hours ? 'selected' : ''}>${h}</option>`)
                             .join('')}
                     </select>
-                    <span style="font-weight: bold; color: var(--w2ui-color);">:</span>
-                    <select class="w2ui-input" id="picker-minute" style="flex: 1; box-sizing: border-box; height: 30px;">
+                    <span>:</span>
+                    <select class="w2ui-input" id="picker-minute" style="flex: 1; height: 30px;">
                         ${Array.from({length: 60}, (_, i) => String(i).padStart(2, '0'))
                             .map(m => `<option value="${m}" ${m === mins ? 'selected' : ''}>${m}</option>`)
                             .join('')}
@@ -236,8 +196,8 @@ function openDateTimePicker(inputElement, form = null) {
             </div>
         </div>
         
-        <div style="padding: 10px; background: var(--w2ui-popup-buttons-bg, #f5f6f8); border-top: 1px solid var(--w2ui-popup-border, #dfdfdf); text-align: center;">
-            <button class="w2ui-btn" id="picker-cancel" style="margin-right: 5px;">Cancel</button>
+        <div class="custom-dt-footer">
+            <button class="w2ui-btn" id="picker-cancel">Cancel</button>
             <button class="w2ui-btn w2ui-btn-blue" id="picker-ok">OK</button>
         </div>
     `;
@@ -297,7 +257,6 @@ const prepareFormRecord = (form, rawRecord) => {
 // Load dropdown list items
 const loadListItems = async (formName) => {
     const form = w2ui[formName];
-    const token = localStorage.getItem('powergslb_token');
     
     const listFieldsMap = {
         'formRecords': [
@@ -334,9 +293,9 @@ const loadListItems = async (formName) => {
                     const response = await fetch(w2uiUrl, {
                         method: 'POST',
                         headers: {
-                            'Content-Type': 'application/x-www-form-urlencoded',
-                            'Authorization': `Bearer ${token}`
+                            'Content-Type': 'application/x-www-form-urlencoded'
                         },
+                        credentials: 'include',
                         body: params.toString()
                     });
                     
@@ -436,8 +395,10 @@ const openPopupForm = (event, recordName, popupWidth, popupHeight, formName) => 
         
         if (Object.keys(savedRecord).length > 0) {
             form.record = structuredClone(savedRecord);
-            form.refresh();
         }
+        
+        // Refresh form to apply dropdown items (must be after render)
+        form.refresh();
 
         if (formName === 'formJwtTokens') {
             if (!isEditMode) {
@@ -504,7 +465,6 @@ const setupJwtTokensCreateMode = (form, container) => {
     }, 50);
 };
 
-
 const setupJwtTokensEditMode = (form, savedRecord, container) => {
     jwtEditModeActive = true;
     
@@ -533,18 +493,27 @@ const setupJwtTokensEditMode = (form, savedRecord, container) => {
         form.record.enabled = isEnabled ? 1 : 0;
 
         customUi.innerHTML = `
-            <div style="background: var(--w2ui-popup-title-bg, #f3f6fa); border: 1px solid var(--w2ui-popup-border, #dfdfdf); border-radius: 4px; padding: 15px; margin: 5px; font-family: var(--w2ui-font-family, sans-serif); color: var(--w2ui-color, #000); font-size: var(--w2ui-font-size, 12px);">
-                <div style="margin-bottom: 8px;"><strong>Token Name:</strong> <span style="margin-left:5px;">${savedRecord.name || 'N/A'}</span></div>
-                <div style="margin-bottom: 8px;"><strong>User:</strong> <span style="margin-left:5px;">${savedRecord.userName || savedRecord.user_id || 'N/A'}</span></div>
-                <div style="margin-bottom: 15px;"><strong>Expires:</strong> <span style="margin-left:5px;">${savedRecord.expires_at || 'Never'}</span></div>
+            <div class="jwt-custom-panel">
+                <div class="jwt-row">
+                    <strong class="jwt-label">Token Name:</strong> 
+                    <span class="jwt-value">${savedRecord.name || 'N/A'}</span>
+                </div>
+                <div class="jwt-row">
+                    <strong class="jwt-label">User:</strong> 
+                    <span class="jwt-value">${savedRecord.userName || savedRecord.user_id || 'N/A'}</span>
+                </div>
+                <div class="jwt-row jwt-row-margin">
+                    <strong class="jwt-label">Expires:</strong> 
+                    <span class="jwt-value">${savedRecord.expires_at || 'Never'}</span>
+                </div>
                 
-                <div style="display: flex; align-items: center; margin-bottom: 15px;">
-                    <label for="jwt-real-enabled" style="font-weight: bold; margin-right: 10px; cursor: pointer;">Enabled:</label>
-                    <input type="checkbox" id="jwt-real-enabled" ${isEnabled ? 'checked' : ''} style="cursor: pointer; width: 16px; height: 16px; margin: 0;">
+                <div class="jwt-checkbox-row">
+                    <label for="jwt-real-enabled" class="jwt-label pointer">Enabled:</label>
+                    <input type="checkbox" id="jwt-real-enabled" ${isEnabled ? 'checked' : ''}>
                 </div>
 
-                <div style="display: flex; gap: 8px;">
-                    <input type="text" readonly value="${savedRecord.token || ''}" class="w2ui-input" style="flex: 1; font-family: monospace; font-size: 11px;">
+                <div class="jwt-token-row">
+                    <input type="text" readonly value="${savedRecord.token || ''}" class="w2ui-input jwt-token-input">
                     <button id="jwt-copy-btn" type="button" class="w2ui-btn">📋 Copy</button>
                 </div>
             </div>
@@ -571,8 +540,6 @@ const setupJwtTokensEditMode = (form, savedRecord, container) => {
     }, 50);
 };
 
-
-
 const gridPopupForm = (event) => {
     const map = {
         gridDomains: ['domain', 400, 200, 'formDomains'],
@@ -587,25 +554,6 @@ const gridPopupForm = (event) => {
 
     if (map[event.target]) {
         openPopupForm(event, ...map[event.target]);
-    }
-};
-
-let reloadIntervalId = 0;
-const reloadInterval = 3000;
-
-const startAutoReload = () => {
-    if (reloadIntervalId === 0) {
-        reloadIntervalId = setInterval(() => w2ui.gridStatus.reload(), reloadInterval);
-        w2ui.gridStatus.toolbar.check('reload');
-        w2ui.gridStatus.reload();
-    }
-};
-
-const stopAutoReload = () => {
-    if (reloadIntervalId !== 0) {
-        clearInterval(reloadIntervalId);
-        reloadIntervalId = 0;
-        w2ui.gridStatus.toolbar.uncheck('reload');
     }
 };
 
@@ -692,7 +640,22 @@ const config = {
         url: w2uiUrl,
         columns: [
             { field: 'recid', text: 'ID', size: '50px', sortable: true },
-            { field: 'status', text: 'Status', size: '55px', sortable: true },
+            { 
+                field: 'status', 
+                text: 'Status', 
+                size: '70px', 
+                sortable: true, 
+                render: (record) => {
+                    const status = record.status || 'Unknown';
+                    // Динамічно формуємо назву класу: 'status-On', 'status-Off'
+                    return `
+                        <div class="pg-status-cell status-${status}">
+                            <div class="status-indicator"></div>
+                            ${status}
+                        </div>
+                    `;
+                }
+            },
             { field: 'domain', text: 'Domain', size: '100px', sortable: true },
             { field: 'name', text: 'Name', size: '100px', sortable: true },
             { field: 'name_type', text: 'Type', size: '60px', sortable: true },
@@ -963,6 +926,10 @@ const config = {
     formTypes: {
         name: 'formTypes',
         url: w2uiUrl,
+        onLoad(event) {
+            event.preventDefault();
+            return false;
+        },
         fields: [
             { field: 'recid', type: 'int', required: true, html: { label: 'Value' } },
             { field: 'name_type', type: 'text', required: true, html: { label: 'Type' } },
@@ -1084,6 +1051,10 @@ const config = {
     formJwtTokens: {
         name: 'formJwtTokens',
         url: w2uiUrl,
+        onLoad(event) {
+            event.preventDefault();
+            return false;
+        },
         fields: [
             { field: 'recid', type: 'hidden' },
             { field: 'token', type: 'text', readonly: true, html: { label: 'Token' } },
@@ -1104,25 +1075,6 @@ const config = {
             { field: 'enabled', type: 'checkbox', required: false, html: { label: 'Enabled' } },
             { field: 'userName', type: 'text', readonly: true, html: { label: 'User Name' } }
         ],
-        onRequest(event) {
-            const params = new URLSearchParams(event.postData);
-            const currentCmd = params.get('cmd');
-            
-            if (jwtEditModeActive && currentCmd === 'get-record') {
-                event.preventDefault();
-                return;
-            }
-            
-            const formRecord = event.owner?.record;
-            const recid = formRecord?.recid;
-            
-            const hasRecid = recid && parseInt(recid) > 0;
-            const cmd = hasRecid ? 'update-record' : 'add-record';
-            
-            params.set('cmd', cmd);
-            params.set('data', 'jwt_tokens');
-            event.postData = params.toString();
-        },
         onSubmit(event) {
             const record = event.postData?.record || event.record;
             
@@ -1146,20 +1098,53 @@ const config = {
         onSave(event) {
             const oldToken = this.record.token;
             const recid = this.record.recid;
+            const recordName = this.record.name;
             const grid = w2ui.gridJwtTokens;
-            
-            grid.reload();
-            
+
             setTimeout(() => {
-                const gridRecord = grid.records.find(r => r.recid === recid || (!recid && r.name === this.record.name));
+                const gridRecord = grid.records.find(r => r.recid === recid || (!recid && r.name === recordName));
+                
                 if (gridRecord?.token && gridRecord.token !== oldToken) {
-                    w2alert(`JWT Token saved successfully!\n\nToken:\n${gridRecord.token}\n\nPlease copy and save it in a secure location.`);
+                    w2popup.open({
+                        title: 'Token Generated',
+                        width: 480,
+                        height: 280,
+                        body: `
+                            <div style="padding: 20px; text-align: center; font-size: 13px;">
+                                <div style="margin-bottom: 15px; font-size: 15px; font-weight: bold; color: var(--pg-text);">
+                                    JWT Token saved successfully!
+                                </div>
+                                <div style="margin-bottom: 15px; font-family: monospace; background-color: var(--pg-bg); padding: 12px; border-radius: 4px; border: 1px solid var(--pg-border); word-break: break-all; user-select: all; cursor: text;">
+                                    ${gridRecord.token}
+                                </div>
+                                <div style="color: var(--pg-muted);">
+                                    Please copy and save it in a secure location.
+                                </div>
+                            </div>
+                        `,
+                        actions: {
+                            Close: () => w2popup.close()
+                        }
+                    });
                 } else if (recid && gridRecord) {
-                    w2alert(`✅ JWT Token settings updated successfully!`);
+                    w2popup.open({
+                        title: 'Notification',
+                        width: 350,
+                        height: 180,
+                        body: `
+                            <div style="padding: 30px; text-align: center; font-size: 14px; color: var(--pg-text);">
+                                ✅ JWT Token settings updated successfully!
+                            </div>
+                        `,
+                        actions: {
+                            Close: () => w2popup.close()
+                        }
+                    });
                 }
                 jwtEditModeActive = false;
-            }, 300);
+            }, 400);
         },
+
         onError(event) {
             console.error('❌ Form error:', event);
             const errorMsg = event.message || 'An error occurred';
@@ -1214,18 +1199,33 @@ const escapeCell = function (field, index, colIndex) {
     return `<div title="${escaped}">${escaped}</div>`;
 };
 
+// Cell rendering and search defaults
 Object.keys(config).forEach(name => {
     const gridConfig = config[name];
+    
+    // Захист кастомних рендерів (те, що ми робили раніше)
     if (gridConfig.columns) {
         gridConfig.columns.forEach(column => {
-            column.render = function(record, index, columnIndex) {
-                const value = String(record[column.field] || '');
-                const escaped = w2utils.encodeTags(value);
-                return `<div title="${escaped}">${escaped}</div>`;
-            };
+            if (!column.render) {
+                column.render = function(record, index, columnIndex) {
+                    const value = String(record[column.field] || '');
+                    const escaped = w2utils.encodeTags(value);
+                    return `<div title="${escaped}">${escaped}</div>`;
+                };
+            }
+        });
+    }
+    
+    // 🌟 ДОДАНО: Примусово змінюємо оператор пошуку з 'begins' на 'contains'
+    if (gridConfig.searches) {
+        gridConfig.searches.forEach(search => {
+            if (search.type === 'text') {
+                search.operator = 'contains';
+            }
         });
     }
 });
+
 
 Object.keys(textareaFields).forEach(name => {
     const spec = textareaFields[name];
@@ -1289,13 +1289,12 @@ Object.keys(textareaFields).forEach(name => {
         else if (this.name.includes('JwtToken')) dataParam = 'jwt_tokens';
         else if (this.name.includes('User')) dataParam = 'users';
         
-        const token = localStorage.getItem('powergslb_token');
         fetch(w2uiUrl, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
+                'Content-Type': 'application/json'
             },
+            credentials: 'include',
             body: JSON.stringify({
                 cmd: 'delete-records',
                 data: dataParam,
@@ -1377,7 +1376,6 @@ Object.keys(textareaFields).forEach(name => {
                     }
                 }
                 
-                const token = localStorage.getItem('powergslb_token');
                 const params = new URLSearchParams();
                 
                 params.append('cmd', 'save-record');
@@ -1394,9 +1392,9 @@ Object.keys(textareaFields).forEach(name => {
                 fetch('/admin/w2ui', {
                     method: 'POST',
                     headers: {
-                        'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/x-www-form-urlencoded'
                     },
+                    credentials: 'include',
                     body: params.toString()
                 })
                 .then(resp => resp.json())
@@ -1409,10 +1407,13 @@ Object.keys(textareaFields).forEach(name => {
                         if (w2ui[gridName]) {
                             w2ui[gridName].reload();
                         }
+                        const runtimeForm = w2ui[`form${base}`];
+                        if (runtimeForm && typeof runtimeForm.onSave === 'function') {
+                            runtimeForm.onSave({ status: 'success' });
+                        }
                     }
                 })
                 .catch(err => {
-                    console.error('Error saving:', err);
                     w2alert('Error: ' + err.message);
                 });
             }
@@ -1482,6 +1483,9 @@ Object.keys(textareaFields).forEach(name => {
 
 // App initialization
 document.addEventListener('DOMContentLoaded', () => {
+    if (document.documentElement.getAttribute('data-theme') === 'dark') {
+        document.body.classList.add('w2ui-dark');
+    }
     w2utils.settings.date_format = 'yyyy-mm-dd';
     w2utils.settings.groupSymbol = '';
 
@@ -1509,4 +1513,121 @@ document.addEventListener('DOMContentLoaded', () => {
     new w2form(config.formViews);
 
     w2ui.layout.html('main', w2ui.gridStatus);
+
+    // ====================================================
+    // Setup column visibility menu (keep open, real-time preview)
+    // ====================================================
+    
+    // Generate column mapping from existing grid configurations
+    const columnMap = {};
+    Object.keys(config).forEach(key => {
+        if (key.startsWith('grid') && config[key].columns) {
+            config[key].columns.forEach(col => {
+                columnMap[col.text] = col.field;
+            });
+        }
+    });
+    
+    // Save grid state (column visibility)
+    const saveGridState = (gridName) => {
+        const grid = w2ui[gridName];
+        if (!grid) return;
+        
+        const state = {
+            columns: grid.columns.map(col => ({
+                field: col.field,
+                hidden: col.hidden
+            }))
+        };
+        
+        localStorage.setItem(`powergslb_grid_state_${gridName}`, JSON.stringify(state));
+    };
+    
+    // Restore grid state (column visibility)
+    const restoreGridState = (gridName) => {
+        const grid = w2ui[gridName];
+        if (!grid) return;
+        
+        const saved = localStorage.getItem(`powergslb_grid_state_${gridName}`);
+        if (!saved) return;
+        
+        try {
+            const state = JSON.parse(saved);
+            state.columns.forEach(savedCol => {
+                const column = grid.columns.find(c => c.field === savedCol.field);
+                if (column) {
+                    column.hidden = savedCol.hidden;
+                }
+            });
+            grid.refresh();
+        } catch (err) {
+            console.error('Failed to restore grid state:', err);
+        }
+    };
+    
+    // Restore grid states on load
+    ['gridStatus', 'gridAudit', 'gridDomains', 'gridJwtTokens', 'gridMonitors', 
+     'gridRecords', 'gridRoutings', 'gridTypes', 'gridUsers', 'gridViews'].forEach(gridName => {
+        setTimeout(() => restoreGridState(gridName), 100);
+    });
+    
+    document.addEventListener('click', (e) => {
+        const menuItem = e.target.closest('.w2ui-menu-item');
+        if (!menuItem) return;
+        
+        const overlay = menuItem.closest('[name*="toolbar-drop"]');
+        if (!overlay) return;
+        
+        const text = menuItem.querySelector('.menu-text')?.textContent?.trim() || '';
+        
+        // Handle Save Grid State
+        if (text.includes('Save Grid State')) {
+            const overlayName = overlay.getAttribute('name') || '';
+            const gridName = overlayName.split('_')[0];
+            saveGridState(gridName);
+            // Don't prevent default - let menu close
+            return;
+        }
+        
+        // Handle Restore Default State
+        if (text.includes('Restore Default State')) {
+            const overlayName = overlay.getAttribute('name') || '';
+            const gridName = overlayName.split('_')[0];
+            const grid = w2ui[gridName];
+            if (grid) {
+                // Show all columns by default
+                grid.columns.forEach(col => { col.hidden = false; });
+                grid.refresh();
+                // Clear saved state
+                localStorage.removeItem(`powergslb_grid_state_${gridName}`);
+            }
+            // Don't prevent default - let menu close
+            return;
+        }
+        
+        // Skip input field
+        if (text.includes('Skip') || text.includes('records')) {
+            return;
+        }
+        
+        // Prevent menu from closing for regular column items
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const columnText = text.split(/[\r\n]/)[0].trim();
+        const fieldName = columnMap[columnText];
+        if (!fieldName) return;
+        
+        const overlayName = overlay.getAttribute('name') || '';
+        const gridName = overlayName.split('_')[0];
+        const grid = w2ui[gridName];
+        if (!grid) return;
+        
+        const column = grid.columns.find(c => c.field === fieldName);
+        if (!column) return;
+        
+        // Toggle visibility
+        column.hidden = !column.hidden;
+        grid.refresh();
+    }, true);
 });

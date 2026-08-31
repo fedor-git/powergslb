@@ -116,13 +116,24 @@ class AdminRequestHandler(HTTPRequestHandler):
             self.end_headers()
             return
         
-        # GET /login - Login page (no auth required)
-        if self.path == '/login' and self.command == 'GET':
-            self.path = '/admin/login.html'  # Rewrite path to serve login.html
+        # /public/* - Public assets (no auth required): login page, favicon, CSS
+        if self.command == 'GET' and len(self.dirs) >= 1 and self.dirs[0] == 'public':
+            SimpleHTTPRequestHandler.do_GET(self)
+        # GET /login - Login page (no auth required, rewrite to /public/login.html)
+        elif self.path == '/login' and self.command == 'GET':
+            self.path = '/public/login.html'  # Rewrite path to serve login.html
             SimpleHTTPRequestHandler.do_GET(self)
         # POST /login - JWT login endpoint (no auth required)
         elif self.path == '/login' and self.command == 'POST':
-            self._send_json_response(self._handle_login())
+            login_response = self._handle_login()
+            # If login was successful, set JWT token as HTTP-only cookie
+            if login_response.get('status') == 'success' and login_response.get('token'):
+                self._send_json_response_with_cookie(login_response, login_response['token'])
+            else:
+                self._send_json_response(login_response)
+        # DELETE /logout - Clear JWT cookie and redirect to login
+        elif self.path == '/logout' and self.command == 'DELETE':
+            self._handle_logout()
         # w2ui CRUD endpoint - auth required (MUST check BEFORE generic GET to avoid static file fallback)
         elif len(self.dirs) == 2 and self.dirs[1] == 'w2ui':
             if not self._is_authorized():
@@ -131,12 +142,18 @@ class AdminRequestHandler(HTTPRequestHandler):
                 self._send_content(self.content(), debug=self.command == 'GET')
             else:
                 self.send_error(404)
-        # GET requests (static files, login.html) - no auth required
+        # GET requests (static admin files) - auth required
         elif self.command == 'GET':
-            SimpleHTTPRequestHandler.do_GET(self)
-        # HEAD requests - no auth required
+            if not self._is_authorized():
+                self._send_authenticate()
+            else:
+                SimpleHTTPRequestHandler.do_GET(self)
+        # HEAD requests - auth required
         elif self.command == 'HEAD':
-            SimpleHTTPRequestHandler.do_HEAD(self)
+            if not self._is_authorized():
+                self._send_authenticate()
+            else:
+                SimpleHTTPRequestHandler.do_HEAD(self)
         # Everything else requires auth
         elif not self._is_authorized():
             self._send_authenticate()
@@ -282,17 +299,40 @@ class AdminRequestHandler(HTTPRequestHandler):
             raise
 
     def _is_authorized(self) -> bool:
-        """Validate credentials (Basic Auth or JWT) against the database; any parse failure counts as unauthorized.
-
+        """Validate credentials (JWT cookie, Basic Auth, or JWT bearer token) against the database.
+        
+        Tries in order:
+        1. JWT token from powergslb_token cookie (HTTP-only, set by login)
+        2. Authorization header (Bearer or Basic)
+        
         On success the identity row (id, user, name) and the client address are stored on self.user as the
         request's UserContext; a fresh or failed request resets it first.
 
         :returns: True when the request carries valid credentials.
         """
         self.user = None
+        
+        # Try JWT token from cookie first (HTTP-only cookie set by login)
+        cookie_header = self.headers.get('Cookie')
+        if cookie_header:
+            logging.debug(f'_is_authorized: Cookie header found: {cookie_header[:50]}...')
+            token = self._extract_cookie_value(cookie_header, 'powergslb_token')
+            if token:
+                logging.debug(f'_is_authorized: Found powergslb_token cookie: {token[:20]}...')
+                if self._verify_jwt_token(token):
+                    logging.debug('_is_authorized: JWT token verified successfully')
+                    return True
+                else:
+                    logging.warning('_is_authorized: JWT token verification failed')
+            else:
+                logging.debug('_is_authorized: powergslb_token cookie not found in Cookie header')
+        else:
+            logging.debug('_is_authorized: No Cookie header in request')
+        
+        # Fall back to Authorization header (Bearer or Basic)
         authorization_header = self.headers.get('Authorization')
-
         if not authorization_header:
+            logging.debug('_is_authorized: No Authorization header, returning False')
             return False
 
         try:
@@ -314,6 +354,22 @@ class AdminRequestHandler(HTTPRequestHandler):
         except Exception as e:  # pylint: disable=broad-exception-caught
             logging.error('authorization error: %s', e)
             return False
+
+    @staticmethod
+    def _extract_cookie_value(cookie_header: str, cookie_name: str) -> str | None:
+        """Extract a cookie value by name from the Cookie header.
+
+        :param cookie_header: The value of the Cookie header (e.g., "cookie1=val1; cookie2=val2").
+        :param cookie_name: The name of the cookie to extract.
+        :returns: The cookie value, or None if not found.
+        """
+        for cookie_pair in cookie_header.split(';'):
+            cookie_pair = cookie_pair.strip()
+            if '=' in cookie_pair:
+                name, value = cookie_pair.split('=', 1)
+                if name == cookie_name:
+                    return value
+        return None
 
     def _verify_basic_auth(self, user: str, password: str) -> bool:
         """Verify Basic Auth credentials against the database.
@@ -382,6 +438,31 @@ class AdminRequestHandler(HTTPRequestHandler):
         self.send_header('Content-Type', 'application/json; charset=utf-8')
         self.send_header('Content-Length', str(len(response_bytes)))
         self.send_header('Cache-Control', self._cache_control or 'no-cache')
+        self.end_headers()
+        self.wfile.write(response_bytes)
+
+    def _send_json_response_with_cookie(self, data: dict[str, Any], token: str, 
+                                       status_code: int = 200, ttl_hours: int = 24) -> None:
+        """Send a JSON response with JWT token set as HTTP-only cookie.
+
+        :param data: The data to encode as JSON.
+        :param token: JWT token to set as cookie.
+        :param status_code: HTTP status code (default: 200 OK).
+        :param ttl_hours: Cookie TTL in hours (default: 24).
+        """
+        response_json = json.dumps(data, separators=(',', ':'))
+        response_bytes = response_json.encode('utf-8')
+        
+        self.send_response(status_code)
+        self.send_header('Content-Type', 'application/json; charset=utf-8')
+        self.send_header('Content-Length', str(len(response_bytes)))
+        self.send_header('Cache-Control', self._cache_control or 'no-cache')
+        
+        # Set JWT token as HTTP-only cookie
+        # Note: SameSite removed to allow cross-site cookie transmission during login redirect
+        cookie_value = f'powergslb_token={token}; Max-Age={ttl_hours * 3600}; Path=/; HttpOnly'
+        self.send_header('Set-Cookie', cookie_value)
+        
         self.end_headers()
         self.wfile.write(response_bytes)
 
@@ -456,6 +537,28 @@ class AdminRequestHandler(HTTPRequestHandler):
                 'status': 'error',
                 'message': 'Failed to generate authentication token'
             }
+
+    def _handle_logout(self) -> None:
+        """Handle logout request: clear JWT cookie by setting Max-Age=0 and return JSON response.
+        
+        Browser will automatically delete the HTTP-only cookie when Max-Age=0.
+        """
+        response = {
+            'status': 'success',
+            'message': 'Logged out successfully'
+        }
+        
+        # Send JSON response with cookie cleared (Max-Age=0)
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        # Clear cookie by setting Max-Age=0
+        self.send_header('Set-Cookie', 'powergslb_token=; Max-Age=0; Path=/; HttpOnly')
+        body = json.dumps(response).encode('utf-8')
+        self.send_header('Content-Length', str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+        
+        logging.info("User logged out from %s", self._client_ip())
 
     def _delete_records(self) -> dict[str, Any]:
         """Handle the delete-records command: delete the selected rows from the database.
@@ -544,9 +647,26 @@ class AdminRequestHandler(HTTPRequestHandler):
         """Parse the query string (GET) or request body (POST) into self.query; a parse error yields an empty query."""
         try:
             if self.query:
-                self.query = parse_query(self.query)
+                logging.debug("_parse_query: Using query string: %s", self.query)
+                parsed = parse_query(self.query)
+                
+                # w2ui sends GET requests with all data in a 'request' URL parameter as JSON string
+                # e.g., ?request={"cmd":"get-records","data":"status",...}
+                # We need to extract and parse that JSON
+                if 'request' in parsed and isinstance(parsed['request'], str):
+                    try:
+                        request_json = json.loads(parsed['request'])
+                        logging.debug("_parse_query: Extracted w2ui request JSON: %s", request_json)
+                        self.query = request_json
+                    except (json.JSONDecodeError, ValueError) as e:
+                        logging.warning("_parse_query: Could not parse 'request' as JSON (%s), using raw params", e)
+                        self.query = parsed
+                else:
+                    self.query = parsed
+                    
             elif self.body:
                 body_str = self.body.decode('utf-8')
+                logging.debug("_parse_query: Using body: %s", body_str)
                 
                 content_type = self.headers.get('Content-Type', '').lower()
                 if 'application/json' in content_type:
@@ -681,8 +801,10 @@ class AdminRequestHandler(HTTPRequestHandler):
         :returns: The JSON-encoded w2ui reply.
         """
         self._parse_query()
-        command = self.query.get('cmd')
+        command = self.query.get('cmd') if isinstance(self.query, dict) else None
         method_name = self._commands.get(command) if isinstance(command, str) else None
+        
+        logging.debug("content: query=%s, cmd=%s, method=%s", self.query, command, method_name)
 
         if method_name is None:
             content: dict[str, Any] = {'status': 'error', 'message': f"command '{command}' not implemented"}

@@ -16,21 +16,24 @@
     </div>
 <script>
     // ====================================
-    // JWT Token Management
+    // Authentication Check
     // ====================================
+    // Instead of checking localStorage (XSS vulnerability), verify auth via the server.
+    // The browser automatically sends the HTTP-only cookie with this request.
+    // If server returns 401, redirect to login; if 200, user is authenticated.
     (function() {
-        const token = localStorage.getItem('powergslb_token');
-
-        // Check if token exists, if not redirect to login
-        if (!token) {
-            window.location.href = '/login';
-            return;
-        }
-
-        // Add JWT token to all AJAX requests
-        $(document).ajaxSend(function(event, jqXHR) {
-            jqXHR.setRequestHeader('Authorization', 'Bearer ' + token);
-        });
+        fetch('/admin/', { credentials: 'include' })
+            .then(response => {
+                if (response.status === 401) {
+                    // Not authenticated, redirect to login
+                    window.location.href = '/login';
+                }
+                // If 200, continue loading admin panel
+            })
+            .catch(err => {
+                console.error('Auth check failed:', err);
+                // On network error, allow page to continue (server may still serve it)
+            });
     })();
 </script>
 </body>
