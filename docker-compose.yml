@@ -43,6 +43,8 @@ services:
     environment:
       # Timezone
       TZ: ${TZ:-UTC}
+      # Development mode: skip asset compression to enable live editing of web interface
+      # Set to false for production builds to reduce bandwidth and improve performance
       DEVELOPMENT: true
       # Database (external MariaDB)
       # POWERGSLB_DATABASE_HOST: mariadb

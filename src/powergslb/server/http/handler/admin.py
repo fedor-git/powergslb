@@ -8,6 +8,7 @@ import io
 import json
 import logging
 import os
+import secrets
 import urllib.parse
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler
@@ -104,6 +105,22 @@ class AdminRequestHandler(HTTPRequestHandler):
         # NOW call super().__init__() - at this point jwt_manager is already initialized
         super().__init__(*args, **kwargs)
 
+    def _handle_request(self) -> None:
+        """Override to handle /api/* routes in addition to the standard admin route."""
+        self._set_remote_ip()
+        self._urlsplit()
+
+        # Check if path matches the route (/admin), /login, /public, or /api
+        is_matching_route = self.dirs and self.dirs[0] == self.route
+        is_public_route = self.route == 'admin' and self.dirs and self.dirs[0] == 'public'
+        is_login_route = self.route == 'admin' and self.dirs and self.dirs[0] == 'login'
+        is_api_route = self.route == 'admin' and self.dirs and self.dirs[0] == 'api'
+        
+        if is_matching_route or is_public_route or is_login_route or is_api_route:
+            self._handle_route()
+        else:
+            self.send_error(404)
+
     def _handle_route(self) -> None:
         """Authenticate (if needed), then serve the login, w2ui CRUD endpoint, or fall through to static admin assets."""
         self.close_connection = True
@@ -134,6 +151,12 @@ class AdminRequestHandler(HTTPRequestHandler):
         # DELETE /logout - Clear JWT cookie and redirect to login
         elif self.path == '/logout' and self.command == 'DELETE':
             self._handle_logout()
+        # /api/v1/* - REST API v1 endpoints (auth required)
+        elif len(self.dirs) >= 3 and self.dirs[0] == 'api' and self.dirs[1] == 'v1':
+            if not self._is_authorized():
+                self._send_json_error('Bearer token required', 401)
+                return
+            self._handle_api_route()
         # w2ui CRUD endpoint - auth required (MUST check BEFORE generic GET to avoid static file fallback)
         elif len(self.dirs) == 2 and self.dirs[1] == 'w2ui':
             if not self._is_authorized():
@@ -340,7 +363,11 @@ class AdminRequestHandler(HTTPRequestHandler):
             
             # Try Bearer token (JWT) authentication
             if scheme.lower() == 'bearer':
-                return self._verify_jwt_token(credentials)
+                # Check if this is an API request - if so, verify against persistent tokens in database
+                if self.path.startswith('/api/v1/'):
+                    return self._is_authorized_bearer(credentials)
+                else:
+                    return self._verify_jwt_token(credentials)
             
             # Try Basic authentication
             elif scheme.lower() == 'basic':
@@ -410,6 +437,83 @@ class AdminRequestHandler(HTTPRequestHandler):
             return True
         except KeyError as e:
             logging.error("Missing required field in JWT payload: %s", e)
+            return False
+
+    def _is_authorized_bearer(self, token: str) -> bool:
+        """Verify persistent JWT Bearer token from database (for API v1).
+        
+        Validates tokens stored in jwt_tokens table:
+        - enabled must be 1
+        - expires_at must be NULL or in the future
+        - Updates last_used timestamp on successful validation
+        - Sets self.user with token owner's user context
+        
+        :param token: The JWT token string from Authorization header.
+        :returns: True if token is valid and authorized, False otherwise.
+        """
+        try:
+            # Query the jwt_tokens table for this token
+            rows = self.database.get_data('jwt_tokens', page=None)
+            
+            if not rows:
+                logging.warning('No rows returned from jwt_tokens table or invalid format')
+                return False
+                
+            records, _ = rows
+            logging.debug('Checking token against %d jwt_tokens records', len(records))
+            for record in records:
+                record_token = record.get('token')
+                record_enabled = record.get('enabled')
+                logging.debug('  Comparing token (match=%s, enabled=%s)', 
+                            record_token == token, record_enabled)
+                
+                if record.get('token') == token and record.get('enabled'):
+                    # Check expiration if set
+                    expires_at = record.get('expires_at')
+                    if expires_at:
+                        from datetime import datetime
+                        try:
+                            exp_time = datetime.fromisoformat(str(expires_at).replace(' ', 'T'))
+                            if datetime.now() > exp_time:
+                                logging.warning('Token expired at %s', expires_at)
+                                return False  # Token expired
+                        except (ValueError, TypeError) as e:
+                            logging.error('Failed to parse token expiration date "%s": %s', expires_at, e)
+                            return False  # Invalid expiration date format = invalid token
+                    
+                    # Token is valid - SET USER CONTEXT and update last_used timestamp
+                    try:
+                        # Create UserContext from token record (user_id from token, user/name from associated user)
+                        user_id = record.get('userID') or record.get('user_id')
+                        user_name = record.get('userName') or 'api-token-user'
+                        self.user = UserContext(
+                            id=user_id,
+                            user=user_name,
+                            name=record.get('name', 'API Token'),
+                            client_ip=self._client_ip()
+                        )
+                        logging.debug('Set self.user for token validation: id=%s, user=%s', user_id, user_name)
+                    except Exception as e:
+                        logging.error('Failed to create UserContext from token record: %s', e)
+                        return False
+                    
+                    try:
+                        from datetime import datetime
+                        now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                        record_id = record.get('recid')  # Note: SELECT uses 'id AS recid'
+                        update_query = 'UPDATE `jwt_tokens` SET `last_used` = %s WHERE `id` = %s'
+                        self.database.modify(update_query, (now, record_id))
+                        logging.debug('Updated last_used timestamp for token id=%s', record_id)
+                    except Exception as e:
+                        logging.error('Failed to update last_used for token: %s', e)
+                        # Continue anyway - token is still valid even if we can't update the timestamp
+                    
+                    logging.info('Bearer token validated successfully for user_id=%s', user_id)
+                    return True
+            logging.warning('Token not found in jwt_tokens table or not enabled')
+            return False
+        except Exception as e:
+            logging.error('Bearer token verification error: %s', e, exc_info=True)
             return False
 
     def _send_authenticate(self, code: int = 401) -> None:
@@ -819,3 +923,352 @@ class AdminRequestHandler(HTTPRequestHandler):
                 content = {'status': 'error', 'message': 'internal error'}
 
         return json.dumps(content, separators=(',', ':'), default=json_default)
+
+    def _handle_api_route(self) -> None:
+        """Handle REST API v1 endpoints.
+        
+        This routes /api/v1/{resource}/* requests to appropriate CRUD operations.
+        Supports all resources: records, domains, monitors, routings, types, views, users, jwt_tokens, audit
+        """
+        try:
+            if len(self.dirs) < 3:
+                self._send_api_error('Invalid API path', 400)
+                return
+            
+            resource = self.dirs[2]  # Extract resource name (domains, records, monitors, etc)
+            
+            # POST /api/v1/{resource}/batch - Batch operations (must be before numeric ID check)
+            if len(self.dirs) == 4 and self.dirs[3] == 'batch' and self.command == 'POST':
+                batch_data = json.loads(self.body.decode('utf-8')) if self.body else {}
+                self._delegate_to_api('batch', resource, batch_data)
+            
+            # POST /api/v1/{resource}/search - Search with JSON body
+            elif len(self.dirs) == 4 and self.dirs[3] == 'search' and self.command == 'POST':
+                search_filter = json.loads(self.body.decode('utf-8')) if self.body else {}
+                self._delegate_to_api('search', resource, search_filter)
+            
+            # GET /api/v1/{resource}/{id} - Get single record
+            elif len(self.dirs) == 4 and self.command == 'GET':
+                try:
+                    record_id = int(self.dirs[3])
+                    self._delegate_to_api('get_record', resource, record_id)
+                except ValueError:
+                    self._send_api_error('Invalid record ID', 400)
+            
+            # PUT /api/v1/{resource}/{id} - Update record
+            elif len(self.dirs) == 4 and self.command == 'PUT':
+                try:
+                    record_id = int(self.dirs[3])
+                    record_data = json.loads(self.body.decode('utf-8')) if self.body else {}
+                    self._delegate_to_api('update_record', resource, record_id, record_data)
+                except ValueError:
+                    self._send_api_error('Invalid record ID', 400)
+            
+            # DELETE /api/v1/{resource}/{id} - Delete record
+            elif len(self.dirs) == 4 and self.command == 'DELETE':
+                try:
+                    record_id = int(self.dirs[3])
+                    self._delegate_to_api('delete_record', resource, record_id)
+                except ValueError:
+                    self._send_api_error('Invalid record ID', 400)
+            
+            # POST /api/v1/{resource} - Create new record
+            elif len(self.dirs) == 3 and self.command == 'POST':
+                record_data = json.loads(self.body.decode('utf-8')) if self.body else {}
+                self._delegate_to_api('create_record', resource, record_data)
+            
+            # GET /api/v1/{resource} - List records with paging
+            elif len(self.dirs) == 3 and self.command == 'GET':
+                self._delegate_to_api('list_records', resource)
+            
+            else:
+                self._send_api_error('Method not allowed', 405)
+        
+        except json.JSONDecodeError:
+            self._send_api_error('Invalid JSON in request body', 400)
+        except Exception as e:
+            logging.error('API route handler error: %s', e, exc_info=True)
+            self._send_api_error('Internal server error', 500)
+
+    def _delegate_to_api(self, action: str, *args) -> None:
+        """Delegate API request handling.
+        
+        Handles: batch, list_records, search, get_record, create_record, update_record, delete_record
+        First arg is the resource name (records, domains, monitors, etc)
+        """
+        try:
+            resource = args[0] if args else None
+            remaining_args = args[1:] if len(args) > 1 else ()
+            
+            if not resource:
+                self._send_api_error('Resource not specified', 400)
+                return
+            
+            if action == 'batch':
+                batch_data = remaining_args[0] if remaining_args else {}
+                operations = batch_data.get('operations', [])
+                if not operations:
+                    self._send_api_error('No operations in batch request', 400)
+                    return
+                
+                if not self.user:
+                    self._send_api_error('User context not available', 401)
+                    return
+                
+                logging.debug(f"API batch: resource={resource}, operations count={len(operations)}")
+                results = []
+                
+                try:
+                    for idx, op in enumerate(operations):
+                        op_action = op.get('action')
+                        op_id = op.get('id')
+                        op_data = op.get('data', {})
+                        
+                        logging.debug("Batch op[%d]: action=%s, id=%s", idx, op_action, op_id)
+                        
+                        if op_action == 'create':
+                            prepared_data = self._prepare_record_data(op_data)
+                            result = self.database.save_data(resource, 0, self.user, **prepared_data)
+                            results.append({'action': op_action, 'status': 'success' if result else 'failed'})
+                        
+                        elif op_action == 'update':
+                            if not op_id:
+                                results.append({'action': op_action, 'status': 'failed', 'error': 'ID required for update'})
+                                continue
+                            
+                            # Get current record and merge with new data (same logic as update_record)
+                            current_rows = self.database.get_data(resource, page=None)
+                            if not current_rows:
+                                results.append({'action': op_action, 'id': op_id, 'status': 'failed', 'error': 'Could not retrieve current record'})
+                                continue
+                            
+                            current_records, _ = current_rows
+                            current_record = None
+                            for record in current_records:
+                                if record.get('recid') == op_id:
+                                    current_record = record
+                                    break
+                            
+                            if not current_record:
+                                results.append({'action': op_action, 'id': op_id, 'status': 'failed', 'error': f'Record with ID {op_id} not found'})
+                                continue
+                            
+                            # Merge current record with new data
+                            merged_data = {**current_record, **op_data}
+                            merged_data.pop('recid', None)  # Remove primary key
+                            
+                            prepared_data = self._prepare_record_data(merged_data)
+                            result = self.database.save_data(resource, op_id, self.user, **prepared_data)
+                            results.append({'action': op_action, 'id': op_id, 'status': 'success' if result else 'failed'})
+                        
+                        elif op_action == 'delete':
+                            if not op_id:
+                                results.append({'action': op_action, 'status': 'failed', 'error': 'ID required for delete'})
+                                continue
+                            result = self.database.delete_data(resource, [op_id], self.user)
+                            results.append({'action': op_action, 'id': op_id, 'status': 'success' if result else 'failed'})
+                        
+                        else:
+                            results.append({'action': op_action, 'status': 'failed', 'error': 'Unknown action'})
+                    
+                    self._send_json_response({'status': 'success', 'results': results})
+                
+                except Exception as e:
+                    error_msg = str(e)
+                    # Parse MySQL constraint errors for better messaging
+                    if '1048' in error_msg and 'cannot be null' in error_msg:
+                        if 'domain_id' in error_msg:
+                            error_msg = 'Domain does not exist. Create the domain first via POST /api/v1/domains'
+                        elif 'monitor_id' in error_msg:
+                            error_msg = 'Monitor does not exist. Create the monitor first via POST /api/v1/monitors'
+                        elif 'routing_id' in error_msg:
+                            error_msg = 'Routing policy does not exist. Create it first via POST /api/v1/routings'
+                        elif 'view_id' in error_msg:
+                            error_msg = 'View does not exist. Create it first via POST /api/v1/views'
+                    logging.error('API batch: Exception during operations: %s: %s', type(e).__name__, str(e), exc_info=True)
+                    self._send_api_error('Batch operation failed: ' + error_msg, 500)
+            
+            elif action == 'list_records':
+                self._parse_query()
+                limit = min(int(self.query.get('limit', 50)), 1000)
+                offset = int(self.query.get('offset', 0))
+                page_req = PageRequest(limit=limit, offset=offset)
+                rows = self.database.get_data(resource, page=page_req)
+                if not rows:
+                    self._send_json_response({'status': 'success', 'records': [], 'total': 0})
+                    return
+                records, total = rows
+                self._send_json_response({
+                    'status': 'success',
+                    'records': records,
+                    'total': total,
+                    'limit': limit,
+                    'offset': offset
+                })
+            
+            elif action == 'search':
+                search_filter = remaining_args[0] if remaining_args else {}
+                limit = min(search_filter.get('limit', 50), 1000)
+                offset = search_filter.get('offset', 0)
+                search_terms = search_filter.get('search', {})
+                page_req = PageRequest(limit=limit, offset=offset)
+                rows = self.database.get_data(resource, page=page_req)
+                if not rows:
+                    self._send_json_response({'status': 'success', 'records': [], 'total': 0})
+                    return
+                records, total = rows
+                filtered_records = [r for r in records if all(r.get(k) == v for k, v in search_terms.items())]
+                self._send_json_response({
+                    'status': 'success',
+                    'records': filtered_records,
+                    'total': len(filtered_records),
+                    'limit': limit,
+                    'offset': offset
+                })
+            
+            elif action == 'get_record':
+                record_id = remaining_args[0] if remaining_args else None
+                rows = self.database.get_data(resource, page=None)
+                if not rows:
+                    self._send_api_error('Record not found', 404)
+                    return
+                records, _ = rows
+                for record in records:
+                    if record.get('recid') == record_id:
+                        self._send_json_response({'status': 'success', 'record': record})
+                        return
+                self._send_api_error('Record not found', 404)
+            
+            elif action == 'create_record':
+                record_data = remaining_args[0] if remaining_args else {}
+                if not self.user:
+                    self._send_api_error('User context not available', 401)
+                    return
+                logging.debug(f"API create_record: resource={resource}, user={self.user}, data={record_data}")
+                try:
+                    # Convert dict fields to JSON strings for database storage
+                    prepared_data = self._prepare_record_data(record_data)
+                    logging.debug(f"API create_record: prepared_data={prepared_data}")
+                    
+                    result = self.database.save_data(resource, 0, self.user, **prepared_data)
+                    logging.debug(f"API create_record: save_data returned {result}")
+                    if result:
+                        # Get the created record (last one in the table)
+                        rows = self.database.get_data(resource, page=None)
+                        if rows:
+                            records, _ = rows
+                            created_record = records[-1] if records else {}
+                            self._send_json_response({'status': 'success', 'record': created_record}, status_code=201)
+                        else:
+                            self._send_api_error('Record created but could not retrieve it', 500)
+                    else:
+                        self._send_api_error('Failed to create record (0 rows affected)', 500)
+                except Exception as e:
+                    logging.error(f"API create_record: Exception during save_data: {type(e).__name__}: {e}", exc_info=True)
+                    self._send_api_error(f'Failed to create record: {str(e)}', 500)
+            
+            elif action == 'update_record':
+                record_id = remaining_args[0] if len(remaining_args) > 0 else None
+                record_data = remaining_args[1] if len(remaining_args) > 1 else {}
+                if not self.user:
+                    self._send_api_error('User context not available', 401)
+                    return
+                if not record_id:
+                    self._send_api_error('Record ID is required for update', 400)
+                    return
+                logging.debug(f"API update_record: resource={resource}, id={record_id}, user={self.user}, data={record_data}")
+                try:
+                    # Get the current record to merge with new data
+                    current_rows = self.database.get_data(resource, page=None)
+                    if not current_rows:
+                        self._send_api_error('Failed to retrieve current record', 500)
+                        return
+                    
+                    current_records, _ = current_rows
+                    current_record = None
+                    for record in current_records:
+                        if record.get('recid') == record_id:
+                            current_record = record
+                            break
+                    
+                    if not current_record:
+                        self._send_api_error(f'Record with ID {record_id} not found', 404)
+                        return
+                    
+                    # Merge current record with new data (new data overrides current fields)
+                    merged_data = {**current_record, **record_data}
+                    # Remove 'recid' if present (it's the key, not a field to update)
+                    merged_data.pop('recid', None)
+                    
+                    # Convert dict fields to JSON strings for database storage
+                    prepared_data = self._prepare_record_data(merged_data)
+                    logging.debug(f"API update_record: prepared_data={prepared_data}")
+                    
+                    result = self.database.save_data(resource, record_id, self.user, **prepared_data)
+                    logging.debug(f"API update_record: save_data returned {result}")
+                    if result:
+                        # Get the updated record
+                        rows = self.database.get_data(resource, page=None)
+                        if rows:
+                            records, _ = rows
+                            for record in records:
+                                if record.get('recid') == record_id:
+                                    self._send_json_response({'status': 'success', 'record': record})
+                                    return
+                        self._send_api_error('Record updated but could not retrieve it', 500)
+                    else:
+                        self._send_api_error('Failed to update record (0 rows affected)', 500)
+                except Exception as e:
+                    logging.error(f"API update_record: Exception during save_data: {type(e).__name__}: {e}", exc_info=True)
+                    self._send_api_error(f'Failed to update record: {str(e)}', 500)
+            
+            elif action == 'delete_record':
+                record_id = remaining_args[0] if remaining_args else None
+                if not self.user:
+                    self._send_api_error('User context not available', 401)
+                    return
+                logging.debug(f"API delete_record: resource={resource}, id={record_id}, user={self.user}")
+                try:
+                    # delete_data expects a list of IDs
+                    result = self.database.delete_data(resource, [record_id], self.user)
+                    logging.debug(f"API delete_record: delete_data returned {result}")
+                    if result:
+                        self._send_json_response({'status': 'success', 'message': 'Record deleted'})
+                    else:
+                        self._send_api_error('Failed to delete record (0 rows affected)', 500)
+                except Exception as e:
+                    logging.error(f"API delete_record: Exception during delete_data: {type(e).__name__}: {e}", exc_info=True)
+                    self._send_api_error(f'Failed to delete record: {str(e)}', 500)
+        
+        except Exception as e:
+            logging.error('API delegation error: %s', e, exc_info=True)
+            self._send_api_error('Failed to process API request', 500)
+
+    def _prepare_record_data(self, record_data: dict) -> dict:
+        """Convert dict fields to JSON strings for database storage.
+        
+        Fields like monitor_json, routing_json that are dict objects need to be
+        converted to JSON strings before MySQL storage.
+        """
+        prepared = {}
+        for key, value in record_data.items():
+            if isinstance(value, dict):
+                # Convert dict to JSON string
+                try:
+                    prepared[key] = json.dumps(value)
+                    logging.debug(f"Converted {key} from dict to JSON string")
+                except Exception as e:
+                    logging.warning(f"Failed to JSON-encode {key}: {e}")
+                    prepared[key] = value
+            else:
+                prepared[key] = value
+        return prepared
+
+    def _send_api_error(self, message: str, code: int = 400) -> None:
+        """Send a JSON error response for API requests."""
+        self.send_response(code)
+        self.send_header('Content-Type', 'application/json')
+        response = json.dumps({'status': 'error', 'message': message}).encode('utf-8')
+        self.send_header('Content-Length', str(len(response)))
+        self.end_headers()
+        self.wfile.write(response)

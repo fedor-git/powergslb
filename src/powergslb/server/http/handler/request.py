@@ -82,12 +82,13 @@ class HTTPRequestHandler(SimpleHTTPRequestHandler, abc.ABC):
         self._set_remote_ip()
         self._urlsplit()
 
-        # Check if path matches the route, OR if it's /login or /public (which admin handler handles)
+        # Check if path matches the route, OR if it's special routes
         is_matching_route = self.dirs and self.dirs[0] == self.route
         is_public_route = self.route == 'admin' and self.dirs and self.dirs[0] == 'public'
-        is_login_route = self.route == 'admin' and self.dirs and self.dirs[0] == 'login'
+        is_login_route = self.route == 'admin' and self.path.startswith('/login')
+        is_api_route = self.route == 'admin' and self.dirs and self.dirs[0] == 'api'  # /api/v1/* routes
         
-        if is_matching_route or is_public_route or is_login_route:
+        if is_matching_route or is_public_route or is_login_route or is_api_route:
             self._handle_route()
         else:
             self.send_error(404)
@@ -219,6 +220,32 @@ class HTTPRequestHandler(SimpleHTTPRequestHandler, abc.ABC):
 
         Draining the body keeps the keep-alive connection in sync even when a handler responds before
         consuming it (matches nginx/Apache).
+        """
+        try:
+            self._read_body()
+        except ValueError as e:
+            logging.error('request body invalid: %s', e)
+            self.send_error(400)
+            return
+        self._handle_request()
+
+    def do_PUT(self) -> None:  # pylint: disable=invalid-name
+        """Read the size-capped request body, then dispatch.
+
+        PUT requests (e.g., REST API updates) require body parsing, identical to POST.
+        """
+        try:
+            self._read_body()
+        except ValueError as e:
+            logging.error('request body invalid: %s', e)
+            self.send_error(400)
+            return
+        self._handle_request()
+
+    def do_DELETE(self) -> None:  # pylint: disable=invalid-name
+        """Read the size-capped request body (if present), then dispatch.
+
+        DELETE requests may optionally have a body. Read it if present to keep the keep-alive connection in sync.
         """
         try:
             self._read_body()
