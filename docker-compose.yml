@@ -69,6 +69,22 @@ services:
     networks:
       - powergslb_network
 
+  pdns-master:
+    image: powerdns/pdns-auth-master:latest # pschiffe/pdns-mysql
+    container_name: pdns-master
+    hostname: pdns-master
+    ports:
+      - "53:53/udp"
+    networks:
+      - powergslb_network
+    volumes:
+      - ./build/pdns.conf:/etc/powerdns/pdns.conf:ro
+    logging:
+      driver: "json-file"
+      options:
+        max-size: 10m
+        max-file: 2
+
 volumes:
   powergslb_mysql_data:
     driver: local

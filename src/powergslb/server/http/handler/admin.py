@@ -811,6 +811,10 @@ class AdminRequestHandler(HTTPRequestHandler):
         recid = int(self.query.get('recid'))
         record = self.query.get('record')
 
+        # Handle case where record data is missing (e.g., GET request instead of POST)
+        if record is None:
+            return {'status': 'error', 'message': 'No record data provided'}
+
         self._validate_record(data, record)
 
         # Special handling: for jwt_tokens, if user_id is a non-numeric string, lookup the user ID
