@@ -48,12 +48,23 @@ class HTTPRequestHandler(SimpleHTTPRequestHandler, abc.ABC):
                  *args: Any,
                  database_config: dict[str, Any],
                  status_registry: StatusRegistry,
-                 timeout: float,
+                 jwt_config: dict[str, Any] | None = None,
+                 timeout: float = 300,
                  **kwargs: Any) -> None:
         self.body: bytes | None = None
+        self._body_read: bool = False  # Track whether we've already read the body
         self.close_connection: bool = False
         self.database: Database = None  # type: ignore[assignment]  # set per request by handle()
         self.database_config: dict[str, Any] = database_config
+        self.jwt_config: dict[str, Any] = jwt_config or {}
+        # Debug logging for jwt_config
+        import logging
+        logging.debug("HTTPRequestHandler.__init__ called with:")
+        logging.debug("  args: %s", args)
+        logging.debug("  jwt_config param: %s", jwt_config)
+        logging.debug("  database_config: %s", "***" if database_config else None)
+        logging.debug("  All kwargs keys: %s", list(kwargs.keys()))
+        logging.debug("HTTPRequestHandler.__init__ received jwt_config: %s", self.jwt_config)
         self.dirs: list[str] = []
         self.path: str = ''
         self.remote_ip: netaddr.IPAddress = None  # type: ignore[assignment]  # set per request by _set_remote_ip()
@@ -71,7 +82,13 @@ class HTTPRequestHandler(SimpleHTTPRequestHandler, abc.ABC):
         self._set_remote_ip()
         self._urlsplit()
 
-        if self.dirs and self.dirs[0] == self.route:
+        # Check if path matches the route, OR if it's special routes
+        is_matching_route = self.dirs and self.dirs[0] == self.route
+        is_public_route = self.route == 'admin' and self.dirs and self.dirs[0] == 'public'
+        is_login_route = self.route == 'admin' and self.path.startswith('/login')
+        is_api_route = self.route == 'admin' and self.dirs and self.dirs[0] == 'api'  # /api/v1/* routes
+        
+        if is_matching_route or is_public_route or is_login_route or is_api_route:
             self._handle_route()
         else:
             self.send_error(404)
@@ -81,14 +98,71 @@ class HTTPRequestHandler(SimpleHTTPRequestHandler, abc.ABC):
 
         :raises ValueError: When the Content-Length header is not an int within 0..max_body_size.
         """
+        import logging
+        
+        # If body is already read, don't read again!
+        if self._body_read:
+            logging.debug("_read_body: body already read (flag=True), skipping re-read")
+            return
+        
+        # Mark as attempted to read
+        self._body_read = True
+        
         content_length = self.headers.get('Content-Length', 0)
+        logging.debug("_read_body: Content-Length header=%s", content_length)
+        
         try:
             content_length = int(content_length)
             if not 0 <= content_length <= self.max_body_size:
                 raise ValueError('out of range')
         except ValueError as e:
             raise ValueError(f"'Content-Length' header invalid: '{content_length}'") from e
-        self.body = self.rfile.read(content_length)
+        
+        logging.debug("_read_body: About to read %d bytes from socket", content_length)
+        
+        if content_length == 0:
+            self.body = b''
+            logging.debug("_read_body: Content-Length is 0, setting empty body")
+            return
+        
+        # Set a timeout on the socket to prevent infinite blocking
+        import socket
+        original_timeout = None
+        if hasattr(self.rfile, '_sock'):
+            original_timeout = self.rfile._sock.gettimeout()
+            logging.debug("_read_body: original socket timeout=%s", original_timeout)
+        
+        try:
+            # Set a 10-second timeout for reading body
+            if hasattr(self.rfile, '_sock'):
+                self.rfile._sock.settimeout(10)
+                logging.debug("_read_body: set socket timeout to 10 seconds")
+        except Exception as e:
+            logging.warning("_read_body: failed to set socket timeout: %s", e)
+        
+        try:
+            logging.debug("_read_body: Starting to read from rfile...")
+            self.body = self.rfile.read(content_length)
+            logging.debug("_read_body: Successfully read %d bytes: %s...", len(self.body) if self.body else 0, 
+                         self.body[:50] if self.body else b'')
+            
+            # Verify we read the correct amount
+            if len(self.body) != content_length:
+                logging.error("_read_body: MISMATCH! Expected %d bytes but got %d bytes. This indicates socket/buffer corruption!",
+                            content_length, len(self.body))
+        except socket.timeout as e:
+            logging.error("_read_body: Socket timeout while reading body: %s", e)
+            raise
+        except Exception as e:
+            logging.error("_read_body: Error reading body: %s", e, exc_info=True)
+            raise
+        finally:
+            # Restore original timeout
+            if hasattr(self.rfile, '_sock'):
+                try:
+                    self.rfile._sock.settimeout(original_timeout)
+                except Exception as e:
+                    logging.warning("_read_body: failed to restore socket timeout: %s", e)
 
     def _encode_body(self, content_bytes: bytes) -> tuple[bytes, str | None]:
         """Return the body to send and its Content-Encoding, or None for identity.
@@ -146,6 +220,32 @@ class HTTPRequestHandler(SimpleHTTPRequestHandler, abc.ABC):
 
         Draining the body keeps the keep-alive connection in sync even when a handler responds before
         consuming it (matches nginx/Apache).
+        """
+        try:
+            self._read_body()
+        except ValueError as e:
+            logging.error('request body invalid: %s', e)
+            self.send_error(400)
+            return
+        self._handle_request()
+
+    def do_PUT(self) -> None:  # pylint: disable=invalid-name
+        """Read the size-capped request body, then dispatch.
+
+        PUT requests (e.g., REST API updates) require body parsing, identical to POST.
+        """
+        try:
+            self._read_body()
+        except ValueError as e:
+            logging.error('request body invalid: %s', e)
+            self.send_error(400)
+            return
+        self._handle_request()
+
+    def do_DELETE(self) -> None:  # pylint: disable=invalid-name
+        """Read the size-capped request body (if present), then dispatch.
+
+        DELETE requests may optionally have a body. Read it if present to keep the keep-alive connection in sync.
         """
         try:
             self._read_body()

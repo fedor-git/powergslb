@@ -48,6 +48,7 @@ erDiagram
     rrsets ||--o{ records: "contains"
     monitors ||--o{ records: "checked by"
     views ||--o{ records: "scoped to"
+    users ||--o{ jwt_tokens: "owns"
 
     users {
         int id PK
@@ -97,6 +98,16 @@ erDiagram
         tinyint disabled
         int weight
     }
+    jwt_tokens {
+        int id PK
+        varchar token UK "512 chars max"
+        varchar name "human-readable name"
+        int user_id FK "-> users.id, CASCADE DELETE"
+        datetime created_at "DEFAULT current_timestamp"
+        datetime expires_at "optional expiration"
+        datetime last_used "auto-updated on use"
+        tinyint enabled "0=disabled, 1=active"
+    }
     audit {
         int id PK
         datetime logged "DEFAULT current_timestamp"
@@ -116,7 +127,7 @@ Unique keys not shown as columns: `rrsets (domain_id, name, type_value)` and `re
 
 ## Table reference
 
-Nine tables.
+Ten tables.
 
 | Table      | Purpose                                                                                            |
 |------------|----------------------------------------------------------------------------------------------------|
@@ -128,6 +139,7 @@ Nine tables.
 | `domains`  | Authoritative zones, one row per zone apex (`example.com`).                                        |
 | `rrsets`   | One `(domain_id, name, type_value)`; owns `ttl` and `routing_id`.                                  |
 | `records`  | One answer inside an rrset: `content`, plus `monitor_id`, `view_id`, `disabled`, `weight`.         |
+| `jwt_tokens` | API authentication tokens. Persistent tokens stored with user FK, expiry, enabled flag, usage tracking. |
 | `audit`    | Append-only trail of admin writes: one row per record with its before and after state.             |
 
 Key relationships and constraints:
@@ -136,6 +148,10 @@ Key relationships and constraints:
   `mail1`, `_sip._tcp`). The FQDN is never stored; the read path rebuilds it.
 - `rrsets` unique key `(domain_id, name, type_value)` - one rrset per record name and type within a zone.
 - `records` unique key `(rrset_id, view_id, content)` - the same content cannot appear twice for one view in an rrset.
+- `jwt_tokens` unique key on `token` field - one token string is unique across all tokens. Foreign key to `users` with
+  CASCADE DELETE means all tokens are removed when a user is deleted. The `expires_at` field is optional (NULL means
+  no expiration). The `last_used` timestamp is auto-updated by the application when the token is used for authentication.
+  Tokens can be disabled via the `enabled` flag without deletion, preserving the audit trail.
 - Foreign keys point `rrsets -> domains, types, routings` and `records -> rrsets, monitors, views`. A populated rrset
   cannot be deleted because its records reference it; you delete the records and the rrset is garbage-collected (below).
 - CHECK constraints: SOA only at the apex (`type_value <> 6 OR name = '@'`), `ttl <= 2147483647`,

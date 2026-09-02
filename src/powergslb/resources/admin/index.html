@@ -1,16 +1,40 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <meta content="text/html; charset=utf-8" http-equiv="content-type"/>
 <head>
     <title>PowerGSLB: Admin</title>
     <link href="src/favicon.svg" rel="icon" type="image/svg+xml"/>
-    <link href="src/w2ui-1.4.3.min.css" rel="stylesheet" type="text/css"/>
-    <link href="src/powergslb-2.4.2.css" rel="stylesheet" type="text/css"/>
+    <link href="src/w2ui-2.0.min.css" rel="stylesheet" type="text/css"/>
+    <link href="src/powergslb-2.5.0.css" rel="stylesheet" type="text/css"/>
     <script src="src/jquery-3.7.1.min.js" type="text/javascript"></script>
-    <script src="src/w2ui-1.4.3.min.js" type="text/javascript"></script>
-    <script src="src/powergslb-2.4.2.js" type="text/javascript"></script>
+    <script src="src/w2ui-2.0.min.js" type="text/javascript"></script>
+    <script src="src/powergslb-2.5.0.js" type="text/javascript"></script>
 </head>
 <body>
-<div id="powergslb" style="width: 100%; height: calc(100vh - 16px);"></div>
+    <div id="powergslb-container">
+        <div id="powergslb" style="width: 100%; height: calc(100vh - 16px);"></div>
+    </div>
+<script>
+    // ====================================
+    // Authentication Check
+    // ====================================
+    // Instead of checking localStorage (XSS vulnerability), verify auth via the server.
+    // The browser automatically sends the HTTP-only cookie with this request.
+    // If server returns 401, redirect to login; if 200, user is authenticated.
+    (function() {
+        fetch('/admin/', { credentials: 'include' })
+            .then(response => {
+                if (response.status === 401) {
+                    // Not authenticated, redirect to login
+                    window.location.href = '/login';
+                }
+                // If 200, continue loading admin panel
+            })
+            .catch(err => {
+                console.error('Auth check failed:', err);
+                // On network error, allow page to continue (server may still serve it)
+            });
+    })();
+</script>
 </body>
 </html>

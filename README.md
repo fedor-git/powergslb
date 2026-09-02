@@ -24,6 +24,8 @@ policies (round-robin, weighted-random, sticky-hash), and DNS views (CIDR and Ge
 * [Building the Docker image](#building-the-docker-image)
 * [Manual setup](#manual-setup)
 * [Configuration](#configuration)
+    * [Environment overrides](#environment-overrides)
+    * [Development mode: Live editing of web interface](#development-mode-live-editing-of-web-interface)
 * [Database](#database)
 * [Web administration interface](#web-administration-interface)
 * [Record selection](#record-selection)
@@ -49,6 +51,11 @@ policies (round-robin, weighted-random, sticky-hash), and DNS views (CIDR and Ge
     * [Response compression](#response-compression)
     * [Admin grid paging](#admin-grid-paging)
 * [API](#api)
+    * [DNS Backend](#dns-backend)
+    * [REST API v1 with JWT Authentication](#rest-api-v1-with-jwt-authentication-)
+        * [JWT Token Management and Security](#jwt-token-management-and-security)
+    * [curl examples](#curl-examples)
+    * [Python](#python)
 * [Tests](#tests)
 * [License](#license)
 
@@ -568,12 +575,12 @@ removing the container discards everything. That is the right mode for a demo an
 the container, see [Persisting data](#persisting-data) below.
 
 ```shell
-docker pull docker.io/acudovs/powergslb:2.4.2
+docker pull docker.io/acudovs/powergslb:2.4.3
 
 docker run -it --privileged \
     --name powergslb --hostname powergslb \
     --tmpfs /run --tmpfs /tmp \
-    docker.io/acudovs/powergslb:2.4.2
+    docker.io/acudovs/powergslb:2.4.3
 ```
 
 Find the container IP address and use it to reach the services:
@@ -637,7 +644,7 @@ docker run -it --privileged \
     --name powergslb --hostname powergslb \
     --tmpfs /run --tmpfs /tmp \
     -v powergslb-db:/var/lib/mysql \
-    docker.io/acudovs/powergslb:2.4.2
+    docker.io/acudovs/powergslb:2.4.3
 ```
 
 First boot initializes the database inside the volume; later runs detect the existing data and reuse it untouched. A
@@ -743,6 +750,10 @@ is a boolean, and the rest are strings.
 The `[database]` is passed straight to `mysql.connector` as connect kwargs. When `unix_socket` is set it takes
 precedence over `host` / `port`.
 
+A connection the database closed while idle (server restart, failover, wait_timeout) is reconnected transparently
+on the next statement. A connection lost mid-statement fails the request instead of retrying it, and a transaction
+is aborted rather than resumed on a fresh connection.
+
 `[server]` and `[admin]` are served by the same HTTP engine, so they accept the same options. Both take
 `keep_alive_timeout` (the HTTP keep-alive idle timeout in seconds) and the same TLS set: `ssl` (bool) to enable HTTPS,
 `cert` (a PEM that may also bundle the private key), `key` (a separate key file when `cert` holds only the
@@ -827,6 +838,46 @@ POWERGSLB_GEOIP_DATABASE=/data/GeoLite2-Country.mmdb  # use a MaxMind file inste
 ```
 
 </details>
+
+### Development mode: Live editing of web interface
+
+When developing or debugging the web administration interface, you can enable live editing of static assets
+(HTML, CSS, JavaScript) without rebuilding the Docker container. Set the `DEVELOPMENT` environment variable to
+`true` to skip the automatic compression and minification of static assets during the build phase:
+
+```shell
+# Build with live-reload support
+DEVELOPMENT=true pip install --editable .
+
+# Or when building the Docker image
+DEVELOPMENT=true docker build -f docker/Dockerfile --force-rm --no-cache -t powergslb:dev .
+
+# Or when running the container (set at build time for best results)
+docker run -it -e DEVELOPMENT=true \
+    -v $(pwd)/src/powergslb/resources/admin:/opt/powergslb/share/powergslb/resources/admin \
+    -v $(pwd)/src/powergslb/resources/public:/opt/powergslb/share/powergslb/resources/public \
+    powergslb:dev
+```
+
+**How it works:**
+
+- When `DEVELOPMENT=true`, the build backend (`build_backend/backend.py`) skips compression of static assets
+- Assets are served uncompressed from the filesystem, allowing live editing without container rebuild
+- Changes to `.js`, `.css`, `.html`, and `.svg` files in `src/powergslb/resources/admin/` and
+  `src/powergslb/resources/public/` are reflected immediately in the browser (with page reload)
+- **Note:** This mode is for development only and significantly increases bandwidth usage in production
+
+**File locations for editing:**
+
+- Admin interface HTML/CSS/JS: `src/powergslb/resources/admin/`
+- Public login interface HTML/CSS: `src/powergslb/resources/public/`
+
+**Example workflow:**
+
+1. Build container with `DEVELOPMENT=true`
+2. Mount the resource directories as volumes
+3. Edit files in your text editor
+4. Refresh the browser to see changes immediately
 
 ---
 
@@ -1341,97 +1392,310 @@ are joined to just that page. This keeps the grids responsive at hundreds of tho
 
 ## API
 
-PowerGSLB exposes two HTTP interfaces, both returning JSON:
+PowerGSLB exposes three HTTP interfaces, all returning JSON:
 
-* **DNS backend** - the PowerDNS Remote Backend protocol, read-only, plain HTTP (default `127.0.0.1:8080`). It binds
-  loopback by default, so reach it from inside the container or set `POWERGSLB_SERVER_ADDRESS=0.0.0.0` to expose it.
-  `GET /dns/lookup/<qname>./<qtype>` returns the filtered answers and `GET /dns/getAllDomains` returns the zone list.
-* **Admin API** - the w2ui CRUD endpoint at `POST /admin/w2ui` over HTTPS (default `:443`), behind HTTP Basic Auth.
-  Parameters are form-encoded (also accepted on the GET query string); records are addressed by `cmd` and a `data`
-  table, and `monitor` and `view` are matched by name, not id.
+### DNS Backend
 
-  The same commands apply to every table - `data` is one of `domains`, `monitors`, `views`, `records`, `routings`,
-  `types`, `users`, `status`, `audit`:
-    * `get-records` - list a table; supports `search`, `sort`, and `limit`/`offset` paging.
-    * `get-record` (`recid=<id>`) - fetch one row by id.
-    * `get-items` (`field=<column>`) - list the values of one column; supports `search`.
-    * `save-record` (`recid=0` to insert, `recid=<id>` to update) - write one row from `record[...]` fields.
-    * `delete-records` (`selected[0]=<id>`) - delete rows by id.
+The PowerDNS Remote Backend protocol, read-only, plain HTTP (default `127.0.0.1:8080`). It binds loopback by default,
+so reach it from inside the container or set `POWERGSLB_SERVER_ADDRESS=0.0.0.0` to expose it.
+  * `GET /dns/lookup/<qname>./<qtype>` - returns the filtered answers
+  * `GET /dns/getAllDomains` - returns the zone list
 
-  `status` and `audit` are read-only (`get-*` only); `status` is the live health view and `audit` is the append-only
-  trail of admin writes (one row per record, holding the stored row before and after the write - an insert has no
-  before state, a delete no after state).
+### REST API v1 ⭐
 
-  An update re-sends the whole row, so editing one field (a record's weight, say) is a read-modify-write:
-  `get-record`, change the field, `save-record` with the unchanged fields preserved.
+Modern, secure JSON-based API at `POST/GET/PUT/DELETE /api/v1/*` over HTTPS (default `:443`), with JWT Bearer token
+authentication. This is the primary interface for programmatic access.
 
-### curl
+**Architecture:** All HTTP interfaces (admin UI at `/admin/*`, admin login at `/login`, and REST API at `/api/v1/*`) 
+are served on a single HTTPS port (`:443` by default). Choose your interface based on your use case:
+- **Web UI:** Visit `https://powergslb/admin/` in a browser, login at `/login` with username/password
+- **REST API:** Programmatic access with JWT Bearer token (create in Web UI)
 
+**Authentication flow for REST API:**
+1. **Create JWT token** via Web UI: Go to `https://powergslb/admin/` → login with your credentials → navigate to `jwt_tokens` table → create a new token
+   - Token is stored in the `jwt_tokens` table (persistent across restarts)
+   - Can be reused across requests until it expires or is disabled
+2. All subsequent API requests include the token: `Authorization: Bearer <token>` header
+
+**Resources:** `domains`, `monitors`, `records`, `routings`, `types`, `views`, `users`, `jwt_tokens`, `audit` (read-only)
+
+**Endpoints:**
+  * `GET /api/v1/{resource}` - List records with optional filtering, sorting, paging
+  * `GET /api/v1/{resource}/{id}` - Get one record
+  * `POST /api/v1/{resource}` - Create a record
+  * `PUT /api/v1/{resource}/{id}` - Update a record
+  * `DELETE /api/v1/{resource}/{id}` - Delete a record
+  * `POST /api/v1/{resource}/search` - Search with advanced filtering, sorting, pagination
+  * `POST /api/v1/{resource}/batch` - Batch CRUD operations (create, update, delete multiple records)
+
+**Query parameters (for list endpoints):**
+  * `limit` - Records per page (default 50, max 1000)
+  * `offset` - Records to skip (default 0)
+  * `search` - JSON object with field:value pairs for filtering
+  * `sort` - JSON array of `{field, direction}` for sorting
+
+#### JWT Token Management and Security
+
+**Token Storage and Persistence:**
+- Tokens are stored in the `jwt_tokens` database table with the following fields:
+  - `id` - Unique token ID (auto-increment)
+  - `token` - The actual bearer token string (unique, 512 chars max)
+  - `name` - Human-readable token name for identification
+  - `user_id` - Foreign key reference to the admin user who created it
+  - `created_at` - Timestamp of token creation (auto-set)
+  - `expires_at` - Optional expiration date (NULL = no expiration)
+  - `last_used` - Timestamp of last API request with this token (auto-updated)
+  - `enabled` - Boolean flag to enable/disable token without deletion
+
+**Token Lifecycle:**
+1. **Create**: Admin user creates token via Web UI (`/admin/` → Tokens table)
+2. **Store**: Token is stored in `jwt_tokens` table with creation timestamp
+3. **Persist**: Tokens survive service restarts (stored in database, not in memory)
+4. **Reuse**: Same token can be reused for multiple API requests
+5. **Expire**: Optional expiration date enforced at validation time
+6. **Disable**: Token can be disabled via `enabled` flag without deletion (preserves audit trail)
+7. **Track**: `last_used` timestamp updated automatically on each successful API request
+
+**Token Validation:**
+- Token must be in `Authorization: Bearer <token>` header
+- Token lookup searches `jwt_tokens` table for matching `token` value
+- Validation checks:
+  1. Token exists in `jwt_tokens` table
+  2. `enabled = 1` (token is not disabled)
+  3. `expires_at` is NULL OR `expires_at` > NOW() (not expired)
+  4. User (via `user_id`) exists and is active
+- Invalid or expired tokens return HTTP 401 Unauthorized
+
+**Best Practices:**
+- Use descriptive names for tokens (e.g., `ci-automation`, `backup-script`)
+- Set expiration dates for temporary access (e.g., short-lived CI tokens)
+- Regularly review `last_used` timestamp to identify unused tokens
+- Disable old tokens rather than deleting them (preserves audit trail in `audit` table)
+- Store token values securely (in CI secrets manager, environment variables, or secure vaults)
+- Never commit tokens to version control
+- Rotate tokens periodically for security
+
+### curl examples
+
+#### DNS Backend
 ```shell
-# DNS backend (inside the container; loopback by default)
-curl 'http://127.0.0.1:8080/dns/lookup/example.com./A'
+# List domains
 curl 'http://127.0.0.1:8080/dns/getAllDomains'
 
-# Admin API: list records (-k accepts the self-signed certificate)
-curl -sk -u admin:admin https://powergslb/admin/w2ui -d cmd=get-records -d data=records
-
-# Admin API: fetch one record by id (the id is the recid field from get-records)
-curl -sk -u admin:admin https://powergslb/admin/w2ui -d cmd=get-record -d data=records -d recid=133
-
-# Admin API: create an A record (omitted fields - disabled, weight - default to 0)
-curl -sk -u admin:admin https://powergslb/admin/w2ui \
-    -d cmd=save-record -d data=records -d recid=0 \
-    -d 'record[domain]=example.com' \
-    -d 'record[name]=app' \
-    -d 'record[name_type]=A' \
-    -d 'record[ttl]=60' \
-    -d 'record[content]=192.0.2.10' \
-    -d 'record[monitor]=No check' \
-    -d 'record[view]=Public' \
-    -d 'record[policy]=Round robin'
-
-# Admin API: change a record's weight (recid=133 updates in place; re-send the row's other fields unchanged)
-curl -sk -u admin:admin https://powergslb/admin/w2ui \
-    -d cmd=save-record -d data=records -d recid=133 \
-    -d 'record[domain]=example.com' \
-    -d 'record[name]=app' \
-    -d 'record[name_type]=A' \
-    -d 'record[ttl]=60' \
-    -d 'record[content]=192.0.2.10' \
-    -d 'record[monitor]=No check' \
-    -d 'record[view]=Public' \
-    -d 'record[policy]=Round robin' \
-    -d 'record[weight]=10'
-
-# Admin API: delete a record by id
-curl -sk -u admin:admin https://powergslb/admin/w2ui -d cmd=delete-records -d data=records -d 'selected[0]=133'
-
-# Admin API: list / add domains
-curl -sk -u admin:admin https://powergslb/admin/w2ui -d cmd=get-records -d data=domains
-curl -sk -u admin:admin https://powergslb/admin/w2ui \
-    -d cmd=save-record -d data=domains -d recid=0 \
-    -d 'record[domain]=example.net'
-
-# Admin API: list monitors / add a TCP check (monitor_json is the check definition; ${content} expands to the record)
-curl -sk -u admin:admin https://powergslb/admin/w2ui -d cmd=get-records -d data=monitors
-curl -sk -u admin:admin https://powergslb/admin/w2ui \
-    -d cmd=save-record -d data=monitors -d recid=0 \
-    -d 'record[monitor]=TCP 443' \
-    -d 'record[monitor_json]={"type": "tcp", "ip": "${content}", "port": 443}'
-
-# Admin API: list views / add a view (rule is a space-separated list or CIDR and geo tokens)
-curl -sk -u admin:admin https://powergslb/admin/w2ui -d cmd=get-records -d data=views
-curl -sk -u admin:admin https://powergslb/admin/w2ui \
-    -d cmd=save-record -d data=views -d recid=0 \
-    -d 'record[view]=Internal' \
-    -d 'record[rule]=10.0.0.0/8 192.168.0.0/16'
-
-# Admin API: add a geo view
-curl -sk -u admin:admin https://powergslb/admin/w2ui \
-    -d cmd=save-record -d data=views -d recid=0 \
-    -d 'record[view]=Europe' \
-    -d 'record[rule]=country:DE country:FR continent:EU'
+# Lookup DNS records
+curl 'http://127.0.0.1:8080/dns/lookup/example.com./A'
+curl 'http://127.0.0.1:8080/dns/lookup/example.com./AAAA'
 ```
+
+#### REST API v1 with JWT Authentication 🔐
+
+**Step 1: Create JWT Token via Web UI**
+
+1. Login to `http://powergslb/admin/` with your admin credentials
+2. Navigate to the **Tokens** table (or **JWT_TOKENS** in the menu)
+3. Click **Add** to create a new token
+4. Fill in:
+   - `name` - Human-readable name (e.g., "ci-automation", "backup-script")
+   - `user_id` - Select the admin user who owns this token
+   - `expires_at` - Optional: set expiration date for temporary access
+5. Copy the generated `token` value
+
+**Step 2: Use Token in API Requests**
+
+Export your token for use in curl commands:
+```shell
+# Set token from Web UI
+TOKEN="your_token_from_admin_panel"
+BASE_URL="http://powergslb"  # or http://powergslb:8080 for local dev
+```
+
+**List operations (GET):**
+```shell
+# List all records with default pagination
+curl -H "Authorization: Bearer $TOKEN" "$BASE_URL/api/v1/records"
+
+# List records with limit and offset
+curl -H "Authorization: Bearer $TOKEN" \
+    "$BASE_URL/api/v1/records?limit=10&offset=0"
+
+# Get one record by ID
+curl -H "Authorization: Bearer $TOKEN" \
+    "$BASE_URL/api/v1/records/133"
+
+# List all domains
+curl -H "Authorization: Bearer $TOKEN" "$BASE_URL/api/v1/domains"
+
+# List all monitors
+curl -H "Authorization: Bearer $TOKEN" "$BASE_URL/api/v1/monitors"
+
+# List JWT tokens (manage your own tokens)
+curl -H "Authorization: Bearer $TOKEN" "$BASE_URL/api/v1/jwt_tokens"
+```
+
+**Search with filtering and sorting (POST):**
+```shell
+# Search records by domain and type
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+    -H 'Content-Type: application/json' \
+    -d '{
+        "search": {"domain": "example.com", "name_type": "A"},
+        "limit": 20
+    }' \
+    "$BASE_URL/api/v1/records/search"
+
+# Advanced search: find all AAAA records with sorting
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+    -H 'Content-Type: application/json' \
+    -d '{
+        "search": {"domain": "example.com", "name_type": "AAAA"},
+        "sort": [{"field": "name", "direction": "ASC"}],
+        "limit": 50
+    }' \
+    "$BASE_URL/api/v1/records/search"
+```
+
+**Create operations (POST):**
+```shell
+# Create a new domain
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+    -H 'Content-Type: application/json' \
+    -d '{"domain": "example.net", "description": "New domain"}' \
+    "$BASE_URL/api/v1/domains"
+
+# Create an A record
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+    -H 'Content-Type: application/json' \
+    -d '{
+        "domain": "example.com",
+        "name": "app",
+        "name_type": "A",
+        "ttl": 60,
+        "content": "192.0.2.10",
+        "monitor": "No check",
+        "view": "Public",
+        "policy": "Round robin"
+    }' \
+    "$BASE_URL/api/v1/records"
+
+# Create a TCP monitor
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+    -H 'Content-Type: application/json' \
+    -d '{
+        "monitor": "tcp-check",
+        "monitor_json": {"type": "tcp", "ip": "${content}", "port": 443}
+    }' \
+    "$BASE_URL/api/v1/monitors"
+```
+
+**Update operations (PUT):**
+```shell
+# Update a record (partial update - specify only fields to change)
+curl -X PUT -H "Authorization: Bearer $TOKEN" \
+    -H 'Content-Type: application/json' \
+    -d '{"weight": 10, "ttl": 300}' \
+    "$BASE_URL/api/v1/records/133"
+
+# Update domain description
+curl -X PUT -H "Authorization: Bearer $TOKEN" \
+    -H 'Content-Type: application/json' \
+    -d '{"description": "Updated description"}' \
+    "$BASE_URL/api/v1/domains/1"
+
+# Disable a JWT token (without deletion)
+curl -X PUT -H "Authorization: Bearer $TOKEN" \
+    -H 'Content-Type: application/json' \
+    -d '{"enabled": 0}' \
+    "$BASE_URL/api/v1/jwt_tokens/5"
+```
+
+**Delete operations (DELETE):**
+```shell
+# Delete a record
+curl -X DELETE -H "Authorization: Bearer $TOKEN" \
+    "$BASE_URL/api/v1/records/133"
+
+# Delete a domain (requires all records be deleted first)
+curl -X DELETE -H "Authorization: Bearer $TOKEN" \
+    "$BASE_URL/api/v1/domains/1"
+```
+
+**Batch operations (POST /batch):**
+
+Create, update, or delete multiple records in a single request:
+
+```shell
+# Create 2 records in one batch
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+    -H 'Content-Type: application/json' \
+    -d '{
+        "operations": [
+            {
+                "action": "create",
+                "data": {
+                    "domain": "example.com",
+                    "name": "web1",
+                    "name_type": "A",
+                    "ttl": 300,
+                    "content": "192.0.2.1",
+                    "monitor": "No check",
+                    "view": "Public",
+                    "policy": "Round robin"
+                }
+            },
+            {
+                "action": "create",
+                "data": {
+                    "domain": "example.com",
+                    "name": "web2",
+                    "name_type": "A",
+                    "ttl": 300,
+                    "content": "192.0.2.2",
+                    "monitor": "No check",
+                    "view": "Public",
+                    "policy": "Round robin"
+                }
+            }
+        ]
+    }' \
+    "$BASE_URL/api/v1/records/batch"
+
+# Update multiple records and delete one - all in one batch
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+    -H 'Content-Type: application/json' \
+    -d '{
+        "operations": [
+            {"action": "update", "id": 133, "data": {"weight": 20}},
+            {"action": "update", "id": 134, "data": {"weight": 30}},
+            {"action": "delete", "id": 135}
+        ]
+    }' \
+    "$BASE_URL/api/v1/records/batch"
+```
+
+**Error handling:**
+```shell
+# 401 Unauthorized - invalid or missing token
+curl -H "Authorization: Bearer invalid_token" \
+    "$BASE_URL/api/v1/records"
+# Response: {"error": "Unauthorized"}
+
+# 404 Not Found - invalid resource ID
+curl -H "Authorization: Bearer $TOKEN" \
+    "$BASE_URL/api/v1/records/999999"
+# Response: {"error": "Record not found"}
+
+# 400 Bad Request - invalid data
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+    -H 'Content-Type: application/json' \
+    -d '{"domain": ""}' \
+    "$BASE_URL/api/v1/domains"
+# Response: {"error": "Validation failed: domain cannot be empty"}
+```
+
+#### Legacy Admin Web API (removed)
+
+The w2ui CRUD endpoint was removed as part of the modern API v1 migration and webauth deprecation. 
+All functionality is available via the new REST API v1 with improved security and JSON-based requests.
 
 The values here need no URL-encoding (none contain `&`, `+`, `%`, or `=`), so plain `-d` is enough; reach for
 `--data-urlencode` if a field ever carries one of those characters.
@@ -1475,7 +1739,7 @@ save("records", record["recid"], record)
 save("domains", 0, {"domain": "example.net"})
 
 # Monitors: monitor_json is the check definition; ${content} expands to the record content
-save("monitors", 0, {"monitor": "TCP 443", "monitor_json": '{"type": "tcp", "ip": "${content}", "port": 443}'})
+save("monitors", 0, {"monitor": "TCP 443", "monitor_json": {"type": "tcp", "ip": "${content}", "port": 443}})
 
 # Views: rule is a space-separated list or CIDR and geo tokens
 save("views", 0, {"view": "Internal", "rule": "10.0.0.0/8 192.168.0.0/16"})

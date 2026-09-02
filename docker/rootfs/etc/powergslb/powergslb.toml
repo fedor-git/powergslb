@@ -27,6 +27,10 @@ cert = "/etc/powergslb/powergslb.pem"
 ciphers = "ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-SHA384:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-SHA256"
 #root = "/tmp/powergslb" # optional override for the admin UI document root
 
+[jwt]
+secret = "change-secret-here"
+ttl = 86400
+
 [monitor]
 update_interval = 60
 icmp_privileged = true

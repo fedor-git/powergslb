@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<meta content="text/html; charset=utf-8" http-equiv="content-type"/>
+<head>
+    <title>PowerGSLB: Login</title>
+    <link href="/public/favicon.svg" rel="icon" type="image/svg+xml"/>
+    <link href="/public/css/powergslb-login.css" rel="stylesheet" type="text/css"/>
+</head>
+<body class="login-page-body">
+    <div class="login-form-container">
+        <h1>PowerGSLB</h1>
+        <p class="login-subtitle"></p>
+
+        <div id="errorMessage" class="login-error-message"></div>
+        <div id="successMessage" class="login-success-message"></div>
+
+        <form id="loginForm">
+            <div class="login-form-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" name="username" required autofocus/>
+            </div>
+
+            <div class="login-form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" required/>
+            </div>
+
+            <div class="login-form-group">
+                <div class="login-checkbox-group">
+                    <input type="checkbox" id="rememberMe" name="rememberMe"/>
+                    <label for="rememberMe">Remember me</label>
+                </div>
+            </div>
+
+            <div class="login-button-group">
+                <button type="button" class="login-btn login-btn-green" id="loginButton">Login</button>
+            </div>
+
+            <div id="loading" class="login-loading">
+                Logging in...
+            </div>
+        </form>
+
+        <div class="login-footer-text">PowerGSLB Admin Panel v2.4.3</div>
+    </div>
+
+    <script>
+        console.log('Login script loaded');
+
+        // ====================================
+        // Theme Management
+        // ====================================
+        function initTheme() {
+            const savedTheme = localStorage.getItem('powergslb.theme') || 'light';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+        }
+
+        document.addEventListener('DOMContentLoaded', initTheme);
+
+        // ====================================
+        // Login Form Management
+        // ====================================
+        const loginForm = document.getElementById('loginForm');
+        const usernameInput = document.getElementById('username');
+        const passwordInput = document.getElementById('password');
+        const rememberMeCheckbox = document.getElementById('rememberMe');
+        const loginButton = document.getElementById('loginButton');
+        const errorMessage = document.getElementById('errorMessage');
+        const successMessage = document.getElementById('successMessage');
+        const loading = document.getElementById('loading');
+
+        console.log('Form elements found:', {
+            loginForm: loginForm ? 'YES' : 'NO',
+            usernameInput: usernameInput ? 'YES' : 'NO',
+            passwordInput: passwordInput ? 'YES' : 'NO',
+            loginButton: loginButton ? 'YES' : 'NO'
+        });
+
+        // ====================================
+        // Helper Functions
+        // ====================================
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.style.display = 'block';
+            successMessage.style.display = 'none';
+        }
+
+        function hideError() {
+            errorMessage.style.display = 'none';
+        }
+
+        function showSuccess(message) {
+            successMessage.textContent = message;
+            successMessage.style.display = 'block';
+            errorMessage.style.display = 'none';
+        }
+
+        function hideSuccess() {
+            successMessage.style.display = 'none';
+        }
+
+        // ====================================
+        // Load Saved Username
+        // ====================================
+        window.addEventListener('load', function () {
+            const savedUsername = localStorage.getItem('powergslb_username');
+            if (savedUsername && usernameInput) {
+                usernameInput.value = savedUsername;
+                if (rememberMeCheckbox) rememberMeCheckbox.checked = true;
+                if (passwordInput) passwordInput.focus();
+            }
+        });
+
+        // ====================================
+        // Login Button Click Handler
+        // ====================================
+        if (loginButton) {
+            loginButton.addEventListener('click', async function (e) {
+                e.preventDefault();
+                console.log('Login button clicked');
+
+                const username = usernameInput.value.trim();
+                const password = passwordInput.value;
+
+                if (!username || !password) {
+                    showError('Please enter both username and password');
+                    return;
+                }
+
+                hideError();
+                hideSuccess();
+
+                loginButton.disabled = true;
+                if (loading) loading.style.display = 'block';
+
+                try {
+                    console.log('Sending login request to /login');
+                    const response = await fetch('/login', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        credentials: 'include',
+                        body: JSON.stringify({
+                            username: username,
+                            password: password,
+                        }),
+                    });
+
+                    console.log('Login response status:', response.status);
+                    console.log('Login response headers:', {
+                        contentType: response.headers.get('content-type'),
+                        setCookie: response.headers.get('set-cookie'),
+                    });
+
+                    const data = await response.json();
+                    console.log('Login response data:', data);
+
+                    if (response.ok && data.status === 'success') {
+                        // Save username if "Remember me" is checked
+                        if (rememberMeCheckbox && rememberMeCheckbox.checked) {
+                            localStorage.setItem('powergslb_username', username);
+                        } else {
+                            localStorage.removeItem('powergslb_username');
+                        }
+
+                        showSuccess('Login successful! Redirecting...');
+                        console.log('Redirecting to /admin/ in 500ms');
+
+                        setTimeout(function () {
+                            window.location.href = '/admin/';
+                        }, 500);
+                    } else {
+                        showError(data.message || 'Login failed. Please check your credentials.');
+                        loginButton.disabled = false;
+                        if (loading) loading.style.display = 'none';
+                    }
+                } catch (error) {
+                    console.error('Login error:', error);
+                    showError('An error occurred during login. Please try again.');
+                    loginButton.disabled = false;
+                    if (loading) loading.style.display = 'none';
+                }
+            });
+        } else {
+            console.error('Login button not found!');
+        }
+
+        // ====================================
+        // Prevent Form Default Submit (backup)
+        // ====================================
+        if (loginForm) {
+            loginForm.addEventListener('submit', function (e) {
+                e.preventDefault();
+                console.log('Form submit event intercepted, triggering button click');
+                if (loginButton) loginButton.click();
+            });
+        }
+    </script>
+</body>
+</html>

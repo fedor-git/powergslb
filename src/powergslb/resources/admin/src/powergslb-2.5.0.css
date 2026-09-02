@@ -1,0 +1,1371 @@
+/*
+ * PowerGSLB admin styles: layout rules, then the dark theme.
+ */
+
+#w2ui-popup .w2ui-field > label { width: 72px; }
+#w2ui-popup .w2ui-field > div { margin-left: 80px; margin-right: 4px; }
+#w2ui-popup .w2ui-field > div > input:not([type=checkbox]),
+#w2ui-popup .w2ui-field > div > select,
+#w2ui-popup .w2ui-field > div > textarea { width: 100%; }
+
+#w2ui-popup .w2ui-field > div > textarea {
+    height: 240px;
+    font-family: monospace;
+    font-size: 12px;
+    resize: none;
+}
+
+.w2ui-overlay .w2ui-grid-searches table td.value {
+    font-size: 0; 
+    white-space: nowrap; 
+}
+
+.w2ui-overlay .w2ui-grid-searches table td.value input[type=text],
+.w2ui-overlay .w2ui-grid-searches table td.value select {
+    box-sizing: border-box;
+    width: 300px !important;
+    margin: 0;
+}
+
+.w2ui-overlay .w2ui-grid-searches table td.value:has(> span:not([style*="none"])) > input[type=text],
+.w2ui-overlay .w2ui-grid-searches table td.value > span > input[type=text] {
+    width: 140px !important;
+}
+
+.w2ui-overlay .w2ui-grid-searches table td.value > span::before {
+    content: '-';
+    display: inline-block;
+    width: 20px;
+    font-size: 13px;
+    text-align: center;
+}
+
+/* ====================================================
+   Dark Theme (Brute-forced for w2ui 2.0)
+   ==================================================== */
+
+html[data-theme="dark"] {
+    color-scheme: dark;
+
+    --pg-bg: #1e1e1e;
+    --pg-surface: #252526;
+    --pg-header: #2d2d30;
+    --pg-grid-head: #3a3a3e;
+    --pg-border: #3a3a3a;
+    --pg-field: #3c3c3c;
+    --pg-field-border: #555;
+    --pg-text: #d4d4d4;
+    --pg-muted: #9aa0a6;
+    --pg-hover: #37373d;
+    --pg-accent: #094771;
+    --pg-accent-text: #ffffff;
+    --pg-shadow: rgba(0, 0, 0, .4);
+    --pg-weekend: #e0736a;
+}
+
+html[data-theme="dark"] body {
+    background-color: var(--pg-bg) !important;
+    color: var(--pg-text) !important;
+}
+
+/* Inputs & Selects */
+html[data-theme="dark"] input:not([type=button]):not([type=checkbox]),
+html[data-theme="dark"] select,
+html[data-theme="dark"] textarea,
+html[data-theme="dark"] .w2ui-input {
+    color: var(--pg-text) !important;
+    background-color: var(--pg-field) !important;
+    border-color: var(--pg-field-border) !important;
+}
+
+/* Checkboxes (Grid & Forms) - FIXED for white background */
+html[data-theme="dark"] input[type="checkbox"] {
+    color-scheme: dark !important;
+    accent-color: var(--pg-accent) !important;
+    background-color: transparent !important; /* Force disable w2ui white background */
+}
+
+html[data-theme="dark"] input[type=checkbox].w2ui-toggle + div {
+    background-color: var(--pg-field) !important;
+    border-color: var(--pg-field-border) !important;
+}
+
+/* Forms, Popups, and Pages (W2UI 2.0 Specific classes) */
+html[data-theme="dark"] .w2ui-popup,
+html[data-theme="dark"] .w2ui-popup .w2ui-box,
+html[data-theme="dark"] .w2ui-popup-body,
+html[data-theme="dark"] .w2ui-page,
+html[data-theme="dark"] .w2ui-form {
+    background-color: var(--pg-surface) !important;
+    color: var(--pg-text) !important;
+}
+
+html[data-theme="dark"] .w2ui-popup-title {
+    color: var(--pg-text) !important;
+    background-image: none !important;
+    background-color: var(--pg-header) !important;
+    border-bottom: 1px solid var(--pg-border) !important;
+}
+
+html[data-theme="dark"] .w2ui-popup-buttons,
+html[data-theme="dark"] .w2ui-form .w2ui-buttons {
+    background-color: var(--pg-header) !important;
+    border-top: 1px solid var(--pg-border) !important;
+}
+
+html[data-theme="dark"] .w2ui-popup .w2ui-msg-close:hover {
+    background-color: var(--pg-border) !important;
+    border-color: var(--pg-field-border) !important;
+}
+
+/* Advanced Search Overlay (W2UI 2.0 Specific classes) */
+html[data-theme="dark"] .w2ui-overlay,
+html[data-theme="dark"] .w2ui-grid-searches {
+    background-color: var(--pg-surface) !important;
+    color: var(--pg-text) !important;
+    border-color: var(--pg-border) !important;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, .6) !important;
+}
+
+html[data-theme="dark"] .w2ui-overlay:before {
+    background-color: var(--pg-surface) !important;
+    border-color: var(--pg-border) !important;
+}
+
+html[data-theme="dark"] .w2ui-grid-searches .w2ui-search-title,
+html[data-theme="dark"] .w2ui-grid-searches .w2ui-search-buttons {
+    background-color: var(--pg-header) !important;
+    color: var(--pg-text) !important;
+    border-color: var(--pg-border) !important;
+}
+
+html[data-theme="dark"] .w2ui-grid-searches table td.caption,
+html[data-theme="dark"] .w2ui-grid-searches table td.operator {
+    color: var(--pg-text) !important;
+    border-right-color: var(--pg-border) !important;
+}
+
+/* Dropdowns */
+html[data-theme="dark"] .w2ui-overlay table.w2ui-drop-menu {
+    color: var(--pg-text) !important;
+    background-color: var(--pg-header) !important;
+}
+
+html[data-theme="dark"] .w2ui-overlay table.w2ui-drop-menu .w2ui-item-even {
+    background-color: var(--pg-header) !important;
+}
+
+html[data-theme="dark"] .w2ui-overlay table.w2ui-drop-menu .w2ui-item-odd {
+    background-color: var(--pg-surface) !important;
+}
+
+html[data-theme="dark"] .w2ui-overlay table.w2ui-drop-menu tr:hover,
+html[data-theme="dark"] .w2ui-overlay .w2ui-col-on-off table tr:hover {
+    background-color: var(--pg-hover) !important;
+}
+
+html[data-theme="dark"] .w2ui-overlay table.w2ui-drop-menu tr.w2ui-selected {
+    background-color: var(--pg-accent) !important;
+}
+
+html[data-theme="dark"] .w2ui-select,
+html[data-theme="dark"] .w2ui-overlay .w2ui-grid-searches table td.operator select {
+    color: var(--pg-text) !important;
+    background-image: none !important;
+    background-color: var(--pg-field) !important;
+    border-color: var(--pg-field-border) !important;
+}
+
+/* Buttons */
+html[data-theme="dark"] button.btn,
+html[data-theme="dark"] .w2ui-btn {
+    box-shadow: none !important;
+}
+
+html[data-theme="dark"] button.btn:not(.btn-blue):not(.btn-green):not(.btn-orange):not(.btn-red),
+html[data-theme="dark"] .w2ui-btn:not(.w2ui-btn-blue):not(.w2ui-btn-green):not(.w2ui-btn-orange):not(.w2ui-btn-red) {
+    color: var(--pg-text) !important;
+    background-image: none !important;
+    background-color: var(--pg-field) !important;
+    border-color: var(--pg-field-border) !important;
+}
+
+html[data-theme="dark"] button.btn:not(.btn-blue):not(.btn-green):not(.btn-orange):not(.btn-red):hover,
+html[data-theme="dark"] .w2ui-btn:not(.w2ui-btn-blue):not(.w2ui-btn-green):not(.w2ui-btn-orange):not(.w2ui-btn-red):hover {
+    background-color: var(--pg-hover) !important;
+}
+
+/* Color picker & Calendars */
+html[data-theme="dark"] .w2ui-color {
+    background-color: var(--pg-header) !important;
+}
+
+html[data-theme="dark"] .w2ui-calendar .w2ui-calendar-title {
+    color: var(--pg-text) !important;
+    background-image: none !important;
+    background-color: var(--pg-header) !important;
+    text-shadow: none !important;
+}
+
+html[data-theme="dark"] .w2ui-calendar .w2ui-calendar-jump {
+    background-color: var(--pg-surface) !important;
+}
+
+html[data-theme="dark"] .w2ui-calendar .w2ui-calendar-jump > :first-child {
+    border-right-color: var(--pg-border) !important;
+}
+
+html[data-theme="dark"] .w2ui-calendar .w2ui-calendar-jump .w2ui-jump-month:hover,
+html[data-theme="dark"] .w2ui-calendar .w2ui-calendar-jump .w2ui-jump-year:hover,
+html[data-theme="dark"] .w2ui-calendar .w2ui-calendar-jump .w2ui-jump-month.selected,
+html[data-theme="dark"] .w2ui-calendar .w2ui-calendar-jump .w2ui-jump-year.selected {
+    color: var(--pg-text) !important;
+    border-color: var(--pg-border) !important;
+    background-color: var(--pg-hover) !important;
+}
+
+html[data-theme="dark"] .w2ui-calendar .w2ui-calendar-previous,
+html[data-theme="dark"] .w2ui-calendar .w2ui-calendar-next {
+    color: var(--pg-muted) !important;
+}
+
+html[data-theme="dark"] .w2ui-calendar .w2ui-calendar-previous:hover,
+html[data-theme="dark"] .w2ui-calendar .w2ui-calendar-next:hover {
+    border-color: var(--pg-border) !important;
+    background-color: var(--pg-hover) !important;
+}
+
+html[data-theme="dark"] .w2ui-calendar .w2ui-calendar-previous > div,
+html[data-theme="dark"] .w2ui-calendar .w2ui-calendar-next > div {
+    border-left-color: var(--pg-muted) !important;
+    border-top-color: var(--pg-muted) !important;
+}
+
+html[data-theme="dark"] .w2ui-calendar table.w2ui-calendar-days td,
+html[data-theme="dark"] .w2ui-calendar table.w2ui-calendar-days td.w2ui-day-empty {
+    color: var(--pg-text) !important;
+    border-color: var(--pg-surface) !important;
+    background-color: var(--pg-bg) !important;
+}
+
+html[data-theme="dark"] .w2ui-calendar table.w2ui-calendar-days td.w2ui-saturday,
+html[data-theme="dark"] .w2ui-calendar table.w2ui-calendar-days td.w2ui-sunday {
+    color: var(--pg-weekend) !important;
+}
+
+html[data-theme="dark"] .w2ui-calendar table.w2ui-calendar-days tr.w2ui-day-title td {
+    color: var(--pg-muted) !important;
+    border-color: var(--pg-surface) !important;
+    background-color: var(--pg-surface) !important;
+}
+
+html[data-theme="dark"] .w2ui-calendar table.w2ui-calendar-days td:hover,
+html[data-theme="dark"] .w2ui-calendar-time td div:hover {
+    color: var(--pg-accent-text) !important;
+    border-color: var(--pg-border) !important;
+    background-color: var(--pg-hover) !important;
+}
+
+html[data-theme="dark"] .w2ui-calendar table.w2ui-calendar-days td.w2ui-date:active {
+    color: var(--pg-accent-text) !important;
+    border-color: var(--pg-border) !important;
+    background-color: var(--pg-accent) !important;
+}
+
+html[data-theme="dark"] .w2ui-calendar table.w2ui-calendar-days td.w2ui-today {
+    background-color: var(--pg-accent) !important;
+}
+
+html[data-theme="dark"] .w2ui-calendar-time td:nth-child(even) {
+    background-color: var(--pg-surface) !important;
+}
+
+/* Lists */
+html[data-theme="dark"] .w2ui-list {
+    border-color: var(--pg-field-border) !important;
+    background-color: var(--pg-field) !important;
+}
+
+html[data-theme="dark"] .w2ui-list ul li {
+    color: var(--pg-text) !important;
+    border-color: var(--pg-accent) !important;
+    background-color: var(--pg-header) !important;
+}
+
+html[data-theme="dark"] .w2ui-list ul li:hover {
+    background-color: var(--pg-hover) !important;
+}
+
+html[data-theme="dark"] .w2ui-list .w2ui-enum-placeholder {
+    color: var(--pg-muted) !important;
+}
+
+/* Panels */
+html[data-theme="dark"] .w2ui-panel,
+html[data-theme="dark"] .w2ui-layout > div .w2ui-panel .w2ui-panel-content {
+    border-color: var(--pg-border) !important;
+}
+
+html[data-theme="dark"] .w2ui-layout > div .w2ui-panel .w2ui-panel-content {
+    background-color: var(--pg-surface) !important;
+    color: var(--pg-text) !important;
+}
+
+/* Grids */
+html[data-theme="dark"] .w2ui-grid,
+html[data-theme="dark"] .w2ui-grid .w2ui-grid-body {
+    background-color: var(--pg-bg) !important;
+    border-color: var(--pg-border) !important;
+}
+
+/* Default text color for grid body (but not status spans) */
+html[data-theme="dark"] .w2ui-grid .w2ui-grid-body .w2ui-grid-records table td {
+    color: var(--pg-text) !important;
+}
+
+html[data-theme="dark"] .w2ui-grid .w2ui-grid-body .w2ui-grid-columns {
+    box-shadow: 0 1px 4px var(--pg-shadow) !important;
+}
+
+html[data-theme="dark"] .w2ui-grid .w2ui-grid-body .w2ui-grid-records table tr.w2ui-odd {
+    background-color: var(--pg-bg) !important;
+}
+
+html[data-theme="dark"] .w2ui-grid .w2ui-grid-body .w2ui-grid-records table tr.w2ui-even {
+    background-color: var(--pg-surface) !important;
+}
+
+html[data-theme="dark"] .w2ui-grid .w2ui-grid-body .w2ui-grid-records table tr.w2ui-odd:hover,
+html[data-theme="dark"] .w2ui-grid .w2ui-grid-body .w2ui-grid-records table tr.w2ui-even:hover {
+    background-color: var(--pg-hover) !important;
+    color: var(--pg-text) !important;
+}
+
+html[data-theme="dark"] .w2ui-grid .w2ui-grid-body .w2ui-grid-records table tr.w2ui-selected,
+html[data-theme="dark"] .w2ui-grid .w2ui-grid-body .w2ui-grid-records table td.w2ui-selected {
+    color: var(--pg-accent-text) !important;
+    background-color: var(--pg-accent) !important;
+}
+
+html[data-theme="dark"] .w2ui-grid .w2ui-grid-body table td {
+    border-right-color: var(--pg-border) !important;
+    border-bottom: 1px solid var(--pg-border) !important;
+}
+
+html[data-theme="dark"] .w2ui-grid .w2ui-grid-body table .w2ui-head {
+    color: var(--pg-text) !important;
+    background-image: none !important;
+    background-color: var(--pg-grid-head) !important;
+    border-right-color: var(--pg-field-border) !important;
+    border-bottom-color: var(--pg-field-border) !important;
+}
+
+html[data-theme="dark"] .w2ui-grid .w2ui-grid-toolbar {
+    background-color: var(--pg-header) !important;
+    border-bottom-color: var(--pg-field-border) !important;
+    box-shadow: 0 1px 2px var(--pg-shadow) !important;
+}
+
+html[data-theme="dark"] .w2ui-toolbar {
+    background-color: var(--pg-header) !important;
+}
+
+/* ====================================================
+   Toolbar Buttons (Add, Edit, Delete, etc. for W2UI 2.0)
+   ==================================================== */
+
+/* Button text color */
+html[data-theme="dark"] .w2ui-toolbar .w2ui-tb-button,
+html[data-theme="dark"] .w2ui-toolbar .w2ui-tb-button .w2ui-tb-text {
+    color: var(--pg-text) !important;
+}
+
+/* Hover state */
+html[data-theme="dark"] .w2ui-toolbar .w2ui-tb-button:hover {
+    background-color: var(--pg-hover) !important;
+    border-radius: 4px !important;
+}
+
+/* Active/pressed state */
+html[data-theme="dark"] .w2ui-toolbar .w2ui-tb-button.w2ui-down,
+html[data-theme="dark"] .w2ui-toolbar .w2ui-tb-button.checked {
+    background-color: var(--pg-accent) !important;
+    border-radius: 4px !important;
+}
+
+html[data-theme="dark"] .w2ui-toolbar .w2ui-tb-button.checked .w2ui-tb-text {
+    color: var(--pg-accent-text) !important;
+}
+
+/* Disabled buttons opacity (e.g., Edit without selection) */
+html[data-theme="dark"] .w2ui-toolbar .w2ui-tb-button.disabled {
+    opacity: 0.4 !important;
+}
+
+/* ====================================================
+   Custom Toolbar Buttons (Theme & Logout)
+   ==================================================== */
+
+.pg-icon-theme:before { content: '\263E'; }
+html[data-theme="dark"] .pg-icon-theme:before { content: '\2600'; }
+
+.w2ui-toolbar .w2ui-tb-button .w2ui-tb-icon > span.pg-icon-theme {
+    margin-top: 1px;
+    font-size: 18px;
+    color: #444;
+}
+
+html[data-theme="dark"] .w2ui-toolbar .w2ui-tb-button .w2ui-tb-icon > span.pg-icon-theme {
+    color: var(--pg-text) !important;
+}
+
+/* Light theme: Logout button (using ID selector) */
+.w2ui-toolbar .w2ui-tb-button[id$="_logout"] {
+    background-color: #f44336;
+    border-radius: 4px;
+    margin-left: 5px;
+    
+    /* Add flex for perfect centering */
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    padding: 0 16px !important;
+}
+
+.w2ui-toolbar .w2ui-tb-button[id$="_logout"]:hover {
+    background-color: #da190b;
+}
+
+/* Remove default left padding that w2ui reserves for icon */
+.w2ui-toolbar .w2ui-tb-button[id$="_logout"] .w2ui-tb-text {
+    color: white !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+/* Dark theme: Logout button */
+html[data-theme="dark"] .w2ui-toolbar .w2ui-tb-button[id$="_logout"] {
+    background-color: #d32f2f !important;
+}
+
+html[data-theme="dark"] .w2ui-toolbar .w2ui-tb-button[id$="_logout"]:hover {
+    background-color: #b71c1c !important;
+}
+
+/* ====================================================
+   Sidebar
+   ==================================================== */
+html[data-theme="dark"] .w2ui-sidebar,
+html[data-theme="dark"] .w2ui-sidebar .w2ui-sidebar-body,
+html[data-theme="dark"] .w2ui-sidebar .w2ui-node {
+    background-color: var(--pg-surface) !important;
+    color: var(--pg-text) !important;
+}
+
+html[data-theme="dark"] .w2ui-sidebar .w2ui-node-caption,
+html[data-theme="dark"] .w2ui-sidebar .w2ui-node-text,
+html[data-theme="dark"] .w2ui-sidebar .w2ui-node-image > span {
+    color: var(--pg-text) !important;
+    text-shadow: none !important;
+    background-color: transparent !important;
+}
+
+html[data-theme="dark"] .w2ui-sidebar .w2ui-node-image > span {
+    color: var(--pg-muted) !important;
+}
+
+html[data-theme="dark"] .w2ui-sidebar .w2ui-node:hover {
+    background-color: var(--pg-hover) !important;
+    border-color: transparent !important;
+}
+
+html[data-theme="dark"] .w2ui-sidebar .w2ui-node-group,
+html[data-theme="dark"] .w2ui-sidebar .w2ui-group-text {
+    color: var(--pg-muted) !important;
+    background-color: var(--pg-surface) !important;
+}
+
+/* Sidebar selection border fix (both themes) */
+.w2ui-sidebar .w2ui-node.w2ui-selected,
+.w2ui-sidebar .w2ui-node.w2ui-selected:hover {
+    border-color: transparent !important;
+    box-shadow: none !important;
+}
+
+html[data-theme="dark"] .w2ui-sidebar .w2ui-node.w2ui-selected,
+html[data-theme="dark"] .w2ui-sidebar .w2ui-node.w2ui-selected:hover {
+    background-color: var(--pg-accent) !important;
+}
+
+html[data-theme="dark"] .w2ui-sidebar .w2ui-selected .w2ui-node-caption,
+html[data-theme="dark"] .w2ui-sidebar .w2ui-selected .w2ui-node-text,
+html[data-theme="dark"] .w2ui-sidebar .w2ui-selected .w2ui-node-image > span {
+    color: var(--pg-accent-text) !important;
+    background-color: transparent !important;
+}
+
+/* Custom Toolbar Buttons */
+.pg-icon-theme:before { content: '\263E'; }
+html[data-theme="dark"] .pg-icon-theme:before { content: '\2600'; }
+
+.w2ui-toolbar table.w2ui-button .w2ui-tb-image > span.pg-icon-theme {
+    margin-top: 1px;
+    font-size: 18px;
+    color: #444;
+}
+
+html[data-theme="dark"] .w2ui-toolbar table.w2ui-button .w2ui-tb-image > span.pg-icon-theme {
+    color: var(--pg-text) !important;
+}
+
+.w2ui-toolbar table[onclick*="'logout'"] {
+    background-color: #f44336;
+    border-color: #e53935;
+}
+
+.w2ui-toolbar table[onclick*="'logout'"]:hover,
+.w2ui-toolbar table[onclick*="'logout'"].over {
+    background-color: #da190b;
+    border-color: #c81a0a;
+}
+
+.w2ui-toolbar table[onclick*="'logout'"] .w2ui-tb-caption {
+    color: white !important;
+}
+
+html[data-theme="dark"] .w2ui-toolbar table[onclick*="'logout'"] {
+    background-color: #d32f2f !important;
+    border-color: #b71c1c !important;
+}
+
+html[data-theme="dark"] .w2ui-toolbar table[onclick*="'logout'"]:hover,
+html[data-theme="dark"] .w2ui-toolbar table[onclick*="'logout'"].over {
+    background-color: #b71c1c !important;
+    border-color: #9e1313 !important;
+}
+
+html[data-theme="dark"] .w2ui-toolbar table[onclick*="'logout'"] .w2ui-tb-caption {
+    color: white !important;
+}
+
+/* ====================================================
+   CHECKBOXES ULTIMATE FIX
+   ==================================================== */
+
+/* Reset checkbox backgrounds from w2ui */
+html[data-theme="dark"] input[type="checkbox"] {
+    -webkit-appearance: checkbox !important;
+    appearance: checkbox !important;
+    color-scheme: dark !important;
+    background: transparent !important;
+}
+
+/* Hardware inversion fallback if browser still draws white square */
+html[data-theme="dark"] .w2ui-grid-select-check,
+html[data-theme="dark"] .w2ui-grid-header-check {
+    filter: invert(0.85) hue-rotate(180deg) !important;
+    mix-blend-mode: screen !important;
+}
+
+/* Remove white bands under checkboxes in table */
+html[data-theme="dark"] .w2ui-col-select,
+html[data-theme="dark"] .w2ui-empty-record td.w2ui-col-select {
+    background-color: var(--pg-bg) !important;
+    border-right-color: var(--pg-border) !important;
+}
+
+/* ====================================================
+   ADVANCED SEARCH FORM FIX
+   ==================================================== */
+
+/* Advanced search overlay - main background and border styling */
+html[data-theme="dark"] .w2ui-overlay,
+html[data-theme="dark"] .w2ui-search-advanced,
+html[data-theme="dark"] .w2ui-search-advanced table,
+html[data-theme="dark"] .w2ui-search-advanced table td {
+    background-color: var(--pg-surface) !important;
+    color: var(--pg-text) !important;
+    border-color: var(--pg-border) !important;
+}
+
+/* Advanced Search title */
+html[data-theme="dark"] .w2ui-search-advanced .w2ui-search-title {
+    background-color: var(--pg-header) !important;
+    color: var(--pg-text) !important;
+    border-bottom: 1px solid var(--pg-border) !important;
+}
+
+/* Buttons panel (Reset / Search) */
+html[data-theme="dark"] .w2ui-search-advanced .w2ui-search-buttons {
+    background-color: var(--pg-header) !important;
+    border-top: 1px solid var(--pg-border) !important;
+}
+
+/* Inputs and dropdowns inside search */
+html[data-theme="dark"] .w2ui-search-advanced select,
+html[data-theme="dark"] .w2ui-search-advanced input[type="text"] {
+    background-color: var(--pg-field) !important;
+    color: var(--pg-text) !important;
+    border: 1px solid var(--pg-field-border) !important;
+}
+
+/* Operator text color (begins, is, etc.) */
+html[data-theme="dark"] .w2ui-search-advanced table td.operator {
+    color: var(--pg-text) !important;
+}
+
+/* ====================================================
+   Unified Sidebar Selection (Light & Dark Theme)
+   ==================================================== */
+
+/* Unified sidebar selection - blue background for both themes */
+html[data-theme="light"] .w2ui-sidebar .w2ui-node.w2ui-selected,
+html[data-theme="light"] .w2ui-sidebar .w2ui-node.w2ui-selected:hover,
+html[data-theme="dark"] .w2ui-sidebar .w2ui-node.w2ui-selected,
+html[data-theme="dark"] .w2ui-sidebar .w2ui-node.w2ui-selected:hover {
+    background-color: #094771 !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+}
+
+/* Unified white text and icon for selected item */
+html[data-theme="light"] .w2ui-sidebar .w2ui-selected .w2ui-node-caption,
+html[data-theme="light"] .w2ui-sidebar .w2ui-selected .w2ui-node-text,
+html[data-theme="light"] .w2ui-sidebar .w2ui-selected .w2ui-node-image > span,
+html[data-theme="dark"] .w2ui-sidebar .w2ui-selected .w2ui-node-caption,
+html[data-theme="dark"] .w2ui-sidebar .w2ui-selected .w2ui-node-text,
+html[data-theme="dark"] .w2ui-sidebar .w2ui-selected .w2ui-node-image > span {
+    color: #ffffff !important; /* White color for maximum contrast */
+    background-color: transparent !important;
+    text-shadow: none !important;
+}
+
+/* ====================================================
+   Toolbar Inline Search Input (Ultimate Fix)
+   ==================================================== */
+
+/* Toolbar inline search input container */
+html[data-theme="dark"] .w2ui-toolbar .w2ui-grid-search-input {
+    background-color: var(--pg-field) !important;
+    border-color: var(--pg-field-border) !important;
+}
+
+/* Search input field */
+html[data-theme="dark"] .w2ui-toolbar .w2ui-grid-search-input input.w2ui-search-all,
+html[data-theme="dark"] .w2ui-toolbar .w2ui-grid-search-input input[type="text"] {
+    background-color: var(--pg-field) !important;
+    color: var(--pg-text) !important;
+}
+
+/* Placeholder text */
+html[data-theme="dark"] .w2ui-toolbar .w2ui-grid-search-input input.w2ui-search-all::placeholder {
+    color: var(--pg-muted) !important;
+}
+
+/* Dropdown button (arrow down) */
+html[data-theme="dark"] .w2ui-toolbar .w2ui-grid-search-input .w2ui-search-drop {
+    background-color: var(--pg-field) !important;
+    border-left-color: var(--pg-field-border) !important;
+    color: var(--pg-text) !important;
+}
+
+/* Dropdown button on hover or active state */
+html[data-theme="dark"] .w2ui-toolbar .w2ui-grid-search-input .w2ui-search-drop:hover,
+html[data-theme="dark"] .w2ui-toolbar .w2ui-grid-search-input .w2ui-search-drop.checked {
+    background-color: var(--pg-hover) !important;
+}
+
+/* Search magnifying glass and reset X icons (if present) */
+html[data-theme="dark"] .w2ui-toolbar .w2ui-grid-search-input .w2ui-icon-search,
+html[data-theme="dark"] .w2ui-toolbar .w2ui-grid-search-name .name-icon,
+html[data-theme="dark"] .w2ui-toolbar .w2ui-grid-search-name .name-cross {
+    background-color: transparent !important;
+    color: var(--pg-text) !important;
+}
+
+/* Block with selected search field (when searching by specific column) */
+html[data-theme="dark"] .w2ui-toolbar .w2ui-grid-search-input .w2ui-grid-search-name {
+    background-color: var(--pg-surface) !important;
+    color: var(--pg-text) !important;
+    border-right-color: var(--pg-field-border) !important;
+}
+
+/* ====================================================
+   Toolbar Search Input (Hover & Focus Fix)
+   ==================================================== */
+
+/* Prevent background change on hover and focus for container */
+html[data-theme="dark"] .w2ui-toolbar .w2ui-grid-search-input:hover,
+html[data-theme="dark"] .w2ui-toolbar .w2ui-grid-search-input:focus,
+html[data-theme="dark"] .w2ui-toolbar .w2ui-grid-search-input:focus-within {
+    background-color: var(--pg-field) !important;
+    border-color: var(--pg-field-border) !important;
+}
+
+/* Prevent background change on hover and click in input field */
+html[data-theme="dark"] .w2ui-toolbar .w2ui-grid-search-input input.w2ui-search-all:hover,
+html[data-theme="dark"] .w2ui-toolbar .w2ui-grid-search-input input.w2ui-search-all:focus,
+html[data-theme="dark"] .w2ui-toolbar .w2ui-grid-search-input input[type="text"]:hover,
+html[data-theme="dark"] .w2ui-toolbar .w2ui-grid-search-input input[type="text"]:focus {
+    background-color: var(--pg-field) !important;
+    color: var(--pg-text) !important;
+}
+
+/* ====================================================
+   Context Menus & Column Toggles (.w2ui-menu)
+   ==================================================== */
+
+/* Main dropdown menu background */
+html[data-theme="dark"] .w2ui-menu,
+html[data-theme="dark"] .w2ui-overlay .w2ui-menu {
+    background-color: var(--pg-surface) !important;
+    border-color: var(--pg-border) !important;
+    color: var(--pg-text) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.7) !important;
+}
+
+/* Regular menu item */
+html[data-theme="dark"] .w2ui-menu .w2ui-menu-item {
+    color: var(--pg-text) !important;
+    background-color: transparent !important;
+}
+
+/* Popup menu on hover (Hover) */
+html[data-theme="dark"] .w2ui-menu .w2ui-menu-item:hover {
+    background-color: var(--pg-hover) !important;
+    color: var(--pg-text) !important;
+}
+
+/* Selected/active menu item */
+html[data-theme="dark"] .w2ui-menu .w2ui-menu-item.w2ui-selected,
+html[data-theme="dark"] .w2ui-menu .w2ui-menu-item.w2ui-selected:hover {
+    background-color: var(--pg-accent) !important;
+    color: var(--pg-accent-text) !important;
+}
+
+/* Text and icons (to prevent white squares) */
+html[data-theme="dark"] .w2ui-menu .w2ui-menu-item .menu-icon,
+html[data-theme="dark"] .w2ui-menu .w2ui-menu-item .menu-text,
+html[data-theme="dark"] .w2ui-menu .w2ui-menu-item .w2ui-icon {
+    background-color: transparent !important;
+    color: inherit !important;
+}
+
+/* Separator line (between settings groups) */
+html[data-theme="dark"] .w2ui-menu .w2ui-menu-divider .line {
+    background-color: var(--pg-border) !important;
+}
+
+/* Input inside menu (e.g., "Skip [ 0 ] records") */
+html[data-theme="dark"] .w2ui-menu .w2ui-menu-item input.w2ui-input {
+    background-color: var(--pg-field) !important;
+    color: var(--pg-text) !important;
+    border: 1px solid var(--pg-field-border) !important;
+}
+
+/* ====================================================
+   Advanced Search Overlay (w2ui 2.0 classes)
+   ==================================================== */
+
+/* Main background and search form container */
+html[data-theme="dark"] .w2ui-overlay-body.w2ui-grid-search-advanced,
+html[data-theme="dark"] .w2ui-grid-search-advanced {
+    background-color: var(--pg-surface) !important;
+    color: var(--pg-text) !important;
+}
+
+/* Advanced Search title */
+html[data-theme="dark"] .w2ui-grid-search-advanced .search-title {
+    background-color: var(--pg-header) !important;
+    color: var(--pg-text) !important;
+    border-bottom: 1px solid var(--pg-border) !important;
+}
+
+/* Borders between columns (ID | = | Input) and label text */
+html[data-theme="dark"] .w2ui-grid-search-advanced table td.caption,
+html[data-theme="dark"] .w2ui-grid-search-advanced table td.operator {
+    color: var(--pg-text) !important;
+    border-right-color: var(--pg-border) !important;
+}
+
+/* Bottom panel with Close, Reset, Search buttons */
+html[data-theme="dark"] .w2ui-grid-search-advanced table td.actions {
+    background-color: var(--pg-header) !important;
+    border-top: 1px solid var(--pg-border) !important;
+}
+
+/* Input fields and dropdowns inside form */
+html[data-theme="dark"] .w2ui-grid-search-advanced select.w2ui-input,
+html[data-theme="dark"] .w2ui-grid-search-advanced input.w2ui-input {
+    background-color: var(--pg-field) !important;
+    color: var(--pg-text) !important;
+    border: 1px solid var(--pg-field-border) !important;
+}
+
+/* ====================================================
+   Advanced Search - Select/Operator Dropdowns Fix
+   ==================================================== */
+
+/* Force color all select elements inside search form */
+html[data-theme="dark"] .w2ui-grid-search-advanced table td.operator select,
+html[data-theme="dark"] .w2ui-grid-search-advanced table td.operator select.w2ui-input,
+html[data-theme="dark"] .w2ui-grid-search-advanced table td.value select,
+html[data-theme="dark"] .w2ui-grid-search-advanced .search-logic select {
+    background-color: var(--pg-field) !important;
+    color: var(--pg-text) !important;
+    border: 1px solid var(--pg-field-border) !important;
+    background-image: none !important;
+    color-scheme: dark !important;
+}
+
+/* Color of actual options (<option>) inside select list */
+html[data-theme="dark"] .w2ui-grid-search-advanced select option {
+    background-color: var(--pg-field) !important;
+    color: var(--pg-text) !important;
+}
+
+/* ====================================================
+   Active Searches Bar (Tags/Chips under Toolbar)
+   ==================================================== */
+
+/* Main panel below toolbar */
+html[data-theme="dark"] .w2ui-grid .w2ui-grid-searches {
+    background-color: var(--pg-surface) !important;
+    border-bottom: 1px solid var(--pg-border) !important;
+    border-top: 1px solid var(--pg-border) !important;
+    color: var(--pg-text) !important;
+}
+
+/* Logic (Any / All) */
+html[data-theme="dark"] .w2ui-grid .w2ui-grid-searches .w2ui-grid-search-logic {
+    background-color: var(--pg-field) !important;
+    color: var(--pg-text) !important;
+    border: 1px solid var(--pg-field-border) !important;
+    border-radius: 20px !important;
+}
+
+html[data-theme="dark"] .w2ui-grid .w2ui-grid-searches .w2ui-grid-search-logic:hover {
+    background-color: var(--pg-hover) !important;
+}
+
+/* Individual "chips" / tags of active search */
+html[data-theme="dark"] .w2ui-grid .w2ui-grid-searches > span.w2ui-action {
+    background-color: var(--pg-field) !important;
+    color: var(--pg-text) !important;
+    border: 1px solid var(--pg-field-border) !important;
+    border-radius: 20px !important;
+    padding: 2px 10px !important;
+}
+
+/* Hover for "chips" */
+html[data-theme="dark"] .w2ui-grid .w2ui-grid-searches > span.w2ui-action:hover {
+    background-color: var(--pg-hover) !important;
+}
+
+/* Save and X buttons on panel */
+html[data-theme="dark"] .w2ui-grid .w2ui-grid-searches .w2ui-btn.grid-search-btn {
+    background-color: var(--pg-field) !important;
+    color: var(--pg-text) !important;
+    border: 1px solid var(--pg-field-border) !important;
+    border-radius: 20px !important;
+}
+
+html[data-theme="dark"] .w2ui-grid .w2ui-grid-searches .w2ui-btn.grid-search-btn:hover {
+    background-color: var(--pg-hover) !important;
+}
+
+/* ====================================================
+   Single Search Tag Overlay (.w2ui-grid-search-single)
+   ==================================================== */
+
+/* Force override w2ui-white hard class */
+html[data-theme="dark"] .w2ui-overlay .w2ui-overlay-body.w2ui-white,
+html[data-theme="dark"] .w2ui-overlay .w2ui-grid-search-single {
+    background-color: var(--pg-surface) !important;
+    color: var(--pg-text) !important;
+}
+
+/* Backgrounds for badges */
+html[data-theme="dark"] .w2ui-grid-search-single .field,
+html[data-theme="dark"] .w2ui-grid-search-single .operator,
+html[data-theme="dark"] .w2ui-grid-search-single .value {
+    background-color: var(--pg-field) !important;
+    color: var(--pg-text) !important;
+    border: 1px solid var(--pg-border) !important;
+}
+
+/* Make operator (begins) slightly darker for contrast, like in light theme */
+html[data-theme="dark"] .w2ui-grid-search-single .operator {
+    background-color: var(--pg-bg) !important;
+}
+
+/* Bottom panel (remove line and background to look like light theme) */
+html[data-theme="dark"] .w2ui-grid-search-single .buttons {
+    background-color: transparent !important;
+    border-top: none !important;
+}
+
+/* Button "Remove This Field" - make it an oval "pill" shape */
+html[data-theme="dark"] .w2ui-grid-search-single .buttons button,
+html[data-theme="dark"] .w2ui-grid-search-single .buttons button.w2ui-btn {
+    background-color: var(--pg-field) !important;
+    color: var(--pg-text) !important;
+    border: 1px solid var(--pg-border) !important;
+    border-radius: 20px !important; /* Oval shape */
+    padding: 4px 16px !important;
+    background-image: none !important;
+    box-shadow: none !important;
+}
+
+html[data-theme="dark"] .w2ui-grid-search-single .buttons button.w2ui-btn:hover {
+    background-color: var(--pg-hover) !important;
+}
+
+/* ====================================================
+   Custom Date/Time Picker
+   ==================================================== */
+
+/* Base styles (Light theme / Markup) */
+.custom-dt-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.custom-dt-modal {
+    background-color: #ffffff;
+    border: 1px solid #dfdfdf;
+    border-radius: 4px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    width: 300px; 
+    overflow: hidden;
+    font-family: var(--w2ui-font-family, verdana, arial, sans-serif);
+    font-size: var(--w2ui-font-size, 12px);
+    color: #000000;
+}
+
+.custom-dt-title {
+    padding: 10px;
+    background-color: #f3f6fa;
+    border-bottom: 1px solid #dfdfdf;
+    font-weight: bold;
+    text-align: center;
+    color: #000000;
+}
+
+.custom-dt-body {
+    padding: 20px 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.custom-dt-row {
+    display: flex;
+    align-items: center;
+}
+
+.custom-dt-label {
+    width: 80px;
+    text-align: right;
+    padding-right: 10px;
+    margin: 0;
+}
+
+.custom-dt-input-wrap {
+    flex: 1;
+}
+
+.custom-dt-time-wrap {
+    flex: 1;
+    display: flex;
+    gap: 5px;
+    align-items: center;
+}
+
+.custom-dt-time-wrap span {
+    font-weight: bold;
+}
+
+.custom-dt-footer {
+    padding: 10px;
+    background-color: #f5f6f8;
+    border-top: 1px solid #dfdfdf;
+    text-align: center;
+}
+
+.custom-dt-footer .w2ui-btn {
+    margin: 0 4px;
+}
+
+/* Dark theme for Date/Time Picker */
+html[data-theme="dark"] .custom-dt-modal {
+    background-color: var(--pg-surface) !important;
+    border-color: var(--pg-border) !important;
+    color: var(--pg-text) !important;
+}
+
+html[data-theme="dark"] .custom-dt-title {
+    background-color: var(--pg-header) !important;
+    border-bottom-color: var(--pg-border) !important;
+    color: var(--pg-text) !important;
+}
+
+html[data-theme="dark"] .custom-dt-label {
+    color: var(--pg-muted) !important;
+}
+
+html[data-theme="dark"] .custom-dt-footer {
+    background-color: var(--pg-header) !important;
+    border-top-color: var(--pg-border) !important;
+}
+
+/* Force color dropdowns and their options in dark */
+html[data-theme="dark"] .custom-dt-modal select,
+html[data-theme="dark"] .custom-dt-modal select.w2ui-input {
+    background-color: var(--pg-field) !important;
+    color: var(--pg-text) !important;
+    border: 1px solid var(--pg-field-border) !important;
+    color-scheme: dark !important;     /* Forces browser to draw dark menu */
+    background-image: none !important; /* Remove white system gradient (macOS/iOS) */
+}
+
+html[data-theme="dark"] .custom-dt-modal select option {
+    background-color: var(--pg-field) !important;
+    color: var(--pg-text) !important;
+}
+
+/* ====================================================
+   JWT Token Custom Edit Panel
+   ==================================================== */
+
+/* Base styles and Light theme */
+.jwt-custom-panel {
+    background-color: #f3f6fa;
+    border: 1px solid #dfdfdf;
+    border-radius: 4px;
+    padding: 15px;
+    margin: 5px;
+    font-family: var(--w2ui-font-family, sans-serif);
+    font-size: var(--w2ui-font-size, 12px);
+    color: #000000;
+}
+
+.jwt-row {
+    margin-bottom: 8px;
+}
+
+.jwt-row-margin {
+    margin-bottom: 15px;
+}
+
+.jwt-label {
+    font-weight: bold;
+}
+
+.jwt-label.pointer {
+    cursor: pointer;
+    margin-right: 10px;
+}
+
+.jwt-value {
+    margin-left: 5px;
+}
+
+.jwt-checkbox-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.jwt-checkbox-row input[type="checkbox"] {
+    cursor: pointer;
+    width: 16px;
+    height: 16px;
+    margin: 0;
+}
+
+.jwt-token-row {
+    display: flex;
+    gap: 8px;
+}
+
+.jwt-token-input {
+    flex: 1;
+    font-family: monospace;
+    font-size: 11px;
+}
+
+/* Dark theme for JWT panel */
+html[data-theme="dark"] .jwt-custom-panel {
+    background-color: var(--pg-surface) !important;
+    border-color: var(--pg-border) !important;
+    color: var(--pg-text) !important;
+}
+
+/* Token input color */
+html[data-theme="dark"] .jwt-custom-panel .jwt-token-input {
+    background-color: var(--pg-field) !important;
+    color: var(--pg-text) !important;
+    border-color: var(--pg-field-border) !important;
+}
+
+/* Checkbox in dark theme (white background fix) */
+html[data-theme="dark"] .jwt-custom-panel input[type="checkbox"] {
+    color-scheme: dark !important;
+    accent-color: var(--pg-accent) !important;
+    background-color: transparent !important;
+}
+
+/* ====================================================
+   Missing Icon Fix (.w2ui-icon-page) - Fixed Backgrounds
+   ==================================================== */
+
+/* Base mask settings */
+.w2ui-sidebar .w2ui-node-image > span.w2ui-icon-page {
+    display: inline-block !important;
+    width: 16px !important;
+    height: 16px !important;
+    
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z'/%3E%3C/svg%3E") no-repeat center center !important;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z'/%3E%3C/svg%3E") no-repeat center center !important;
+    
+    -webkit-mask-size: contain !important;
+    mask-size: contain !important;
+    vertical-align: middle !important;
+    margin-top: -2px !important;
+}
+
+/* Icon color in light theme (inactive) */
+html[data-theme="light"] .w2ui-sidebar .w2ui-node-image > span.w2ui-icon-page {
+    background-color: #555555 !important; /* Dark gray */
+}
+
+/* Icon color in dark theme (inactive) */
+html[data-theme="dark"] .w2ui-sidebar .w2ui-node-image > span.w2ui-icon-page {
+    background-color: var(--pg-text) !important; /* Light theme text color */
+}
+
+/* Force WHITE icon color for active (selected) item in both themes */
+/* This overrides the transparent background we set earlier */
+html[data-theme="light"] .w2ui-sidebar .w2ui-selected .w2ui-node-image > span.w2ui-icon-page,
+html[data-theme="dark"] .w2ui-sidebar .w2ui-selected .w2ui-node-image > span.w2ui-icon-page {
+    background-color: #ffffff !important;
+}
+
+/* ====================================================
+   Grid Footer Fix (W2UI 2.0)
+   ==================================================== */
+
+/* Repaint container and its inner div */
+html[data-theme="dark"] .w2ui-grid .w2ui-grid-footer,
+html[data-theme="dark"] .w2ui-grid .w2ui-grid-footer > div {
+    color: var(--pg-text) !important;
+    background-image: none !important;
+    background-color: var(--pg-surface) !important;
+    border-top-color: var(--pg-border) !important;
+    box-shadow: none !important;
+}
+
+/* Color of text for left, right, and center parts */
+html[data-theme="dark"] .w2ui-grid .w2ui-grid-footer .w2ui-footer-left,
+html[data-theme="dark"] .w2ui-grid .w2ui-grid-footer .w2ui-footer-right,
+html[data-theme="dark"] .w2ui-grid .w2ui-grid-footer .w2ui-footer-center {
+    color: var(--pg-text) !important;
+}
+
+/* Pagination/navigation buttons in footer */
+html[data-theme="dark"] .w2ui-grid .w2ui-grid-footer .w2ui-footer-center .w2ui-footer-nav a.w2ui-footer-btn {
+    color: var(--pg-text) !important;
+    background-color: transparent !important;
+}
+
+html[data-theme="dark"] .w2ui-grid .w2ui-grid-footer .w2ui-footer-center .w2ui-footer-nav a.w2ui-footer-btn:hover {
+    color: var(--pg-accent-text) !important;
+    background-color: var(--pg-accent) !important;
+    border-radius: 3px !important;
+}
+
+/* ====================================================
+   Status Column Color Coding
+   ==================================================== */
+
+/* Status "On" - Green (Light Theme) */
+body:not([data-theme="dark"]) .w2ui-grid .w2ui-grid-body .w2ui-grid-records table td span.status-on {
+    color: #22c55e !important;
+    font-weight: 500 !important;
+}
+
+/* Status "On" - Green (Dark Theme) */
+html[data-theme="dark"] body .w2ui-grid .w2ui-grid-body .w2ui-grid-records table td span.status-on {
+    color: #4ade80 !important;
+    font-weight: 500 !important;
+}
+
+/* Status "Off" - Red (Light Theme) */
+body:not([data-theme="dark"]) .w2ui-grid .w2ui-grid-body .w2ui-grid-records table td span.status-off {
+    color: #ef4444 !important;
+    font-weight: 500 !important;
+}
+
+/* Status "Off" - Red (Dark Theme) */
+html[data-theme="dark"] body .w2ui-grid .w2ui-grid-body .w2ui-grid-records table td span.status-off {
+    color: #f87171 !important;
+    font-weight: 500 !important;
+}
+
+/* Status Indicator Dot (Light Theme) */
+body:not([data-theme="dark"]) .w2ui-grid .w2ui-grid-body .w2ui-grid-records table td span.status-indicator {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 6px;
+    vertical-align: middle;
+    background-color: #22c55e !important;
+}
+
+body:not([data-theme="dark"]) .w2ui-grid .w2ui-grid-body .w2ui-grid-records table td span.status-off .status-indicator {
+    background-color: #ef4444 !important;
+}
+
+/* Status Indicator Dot (Dark Theme) */
+html[data-theme="dark"] body .w2ui-grid .w2ui-grid-body .w2ui-grid-records table td span.status-indicator {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 6px;
+    vertical-align: middle;
+}
+
+html[data-theme="dark"] body .w2ui-grid .w2ui-grid-body .w2ui-grid-records table td span.status-on .status-indicator {
+    background-color: #4ade80 !important;
+}
+
+html[data-theme="dark"] body .w2ui-grid .w2ui-grid-body .w2ui-grid-records table td span.status-off .status-indicator {
+    background-color: #f87171 !important;
+}
+
+/* Base appearance of status cell */
+.pg-status-cell {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 600;
+}
+
+.pg-status-cell .status-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: #9e9e9e;
+}
+
+/* Status On (Green) */
+.pg-status-cell.status-On { color: #4CAF50; }
+.pg-status-cell.status-On .status-indicator {
+    background-color: #4CAF50;
+    box-shadow: 0 0 4px #4CAF50;
+}
+
+/* Status Off (Red) */
+.pg-status-cell.status-Off { color: #F44336; }
+.pg-status-cell.status-Off .status-indicator {
+    background-color: #F44336;
+    box-shadow: 0 0 4px #F44336;
+}
+/* ====================================================
+   Grid Row Numbers (Fixed Records Column)
+   ==================================================== */
+
+/* Main background container for row numbers */
+html[data-theme="dark"] .w2ui-grid .w2ui-grid-frecords {
+    background-color: var(--pg-bg) !important;
+}
+
+/* Background color for odd rows */
+html[data-theme="dark"] .w2ui-grid .w2ui-grid-frecords tr.w2ui-odd {
+    background-color: var(--pg-bg) !important;
+}
+
+/* Background color for even rows */
+html[data-theme="dark"] .w2ui-grid .w2ui-grid-frecords tr.w2ui-even {
+    background-color: var(--pg-surface) !important;
+}
+
+/* Hover state */
+html[data-theme="dark"] .w2ui-grid .w2ui-grid-frecords tr.w2ui-odd:hover,
+html[data-theme="dark"] .w2ui-grid .w2ui-grid-frecords tr.w2ui-even:hover {
+    background-color: var(--pg-hover) !important;
+}
+
+/* Selected row */
+html[data-theme="dark"] .w2ui-grid .w2ui-grid-frecords tr.w2ui-selected td.w2ui-col-number {
+    background-color: var(--pg-accent) !important;
+    color: var(--pg-accent-text) !important;
+    border-right-color: var(--pg-accent) !important;
+}
+
+/* Row number cell itself */
+html[data-theme="dark"] .w2ui-grid .w2ui-col-number {
+    color: var(--pg-muted) !important; /* Make numbers slightly grayed out */
+    background-color: transparent !important;
+    border-right: 1px solid var(--pg-border) !important;
+    border-bottom: 1px solid var(--pg-border) !important;
+}
+
+html[data-theme="dark"] .w2ui-grid .w2ui-grid-frecords tr[line="bottom"] td {
+    border-right-color: var(--pg-border) !important;
+}
+
+/* ====================================================
+   Grid Scroll Corners
+   ==================================================== */
+
+html[data-theme="dark"] .w2ui-grid .w2ui-grid-scroll1,
+html[data-theme="dark"] .w2ui-grid .w2ui-grid-scroll2 {
+    background-color: var(--pg-surface) !important; /* Or var(--pg-bg), depending on footer appearance */
+    border-color: var(--pg-border) !important;
+}
+
+/* ====================================================
+   Ultimate Fix for Grid Left Edge Artifacts (White Dots)
+   ==================================================== */
+
+html[data-theme="dark"] .w2ui-grid .w2ui-grid-frecords,
+html[data-theme="dark"] .w2ui-grid .w2ui-grid-frecords table,
+html[data-theme="dark"] .w2ui-grid .w2ui-grid-frecords tr,
+html[data-theme="dark"] .w2ui-grid .w2ui-grid-frecords td {
+    background-color: transparent !important;
+    border-color: var(--pg-border) !important;
+    box-shadow: none !important;
+}
+
+html[data-theme="dark"] .w2ui-grid .w2ui-grid-records table td.w2ui-grid-data-spacer,
+html[data-theme="dark"] .w2ui-grid .w2ui-grid-records table td.w2ui-grid-data-last {
+    background-color: transparent !important;
+    border-color: var(--pg-border) !important;
+    border-radius: 0 !important;
+}
+
+html[data-theme="dark"] .w2ui-grid .w2ui-grid-frecords tr[line="bottom"] td,
+html[data-theme="dark"] .w2ui-grid .w2ui-grid-records tr[line="bottom"] td {
+    border-bottom: 1px solid var(--pg-border) !important;
+    border-right: 1px solid var(--pg-border) !important;
+}
+
+/* ====================================================
+   Popup & Alert Text Wrap Fix
+   ==================================================== */
+
+.w2ui-popup .w2ui-msg-body,
+.w2ui-popup .w2ui-box {
+    word-wrap: break-word !important;
+    overflow-wrap: break-word !important;
+    word-break: break-word !important;
+}

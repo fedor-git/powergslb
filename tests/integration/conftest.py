@@ -65,6 +65,88 @@ class W2UIClient:
                      if all(r.get(k) == v for k, v in match.items())), None)
 
 
+class APIClient:
+    """REST API v1 client with JWT Bearer authentication."""
+
+    def __init__(self, url: str, token: str = '') -> None:
+        self._url = f'{url}/api/v1'
+        self._token = token
+
+    def _headers(self) -> dict[str, str]:
+        headers = {'Content-Type': 'application/json'}
+        if self._token:
+            headers['Authorization'] = f'Bearer {self._token}'
+        return headers
+
+    def list(self, resource: str, limit: int = 50, offset: int = 0) -> requests.Response:
+        """GET /api/v1/{resource} - List records with pagination."""
+        return requests.get(
+            f'{self._url}/{resource}',
+            params={'limit': limit, 'offset': offset},
+            headers=self._headers(),
+            verify=False,
+            timeout=_TIMEOUT
+        )
+
+    def get(self, resource: str, recid: int) -> requests.Response:
+        """GET /api/v1/{resource}/{id} - Get single record."""
+        return requests.get(
+            f'{self._url}/{resource}/{recid}',
+            headers=self._headers(),
+            verify=False,
+            timeout=_TIMEOUT
+        )
+
+    def create(self, resource: str, **fields: Any) -> requests.Response:
+        """POST /api/v1/{resource} - Create new record."""
+        return requests.post(
+            f'{self._url}/{resource}',
+            json=fields,
+            headers=self._headers(),
+            verify=False,
+            timeout=_TIMEOUT
+        )
+
+    def update(self, resource: str, recid: int, **fields: Any) -> requests.Response:
+        """PUT /api/v1/{resource}/{id} - Update record."""
+        return requests.put(
+            f'{self._url}/{resource}/{recid}',
+            json=fields,
+            headers=self._headers(),
+            verify=False,
+            timeout=_TIMEOUT
+        )
+
+    def delete(self, resource: str, recid: int) -> requests.Response:
+        """DELETE /api/v1/{resource}/{id} - Delete record."""
+        return requests.delete(
+            f'{self._url}/{resource}/{recid}',
+            headers=self._headers(),
+            verify=False,
+            timeout=_TIMEOUT
+        )
+
+    def search(self, resource: str, **search_params: Any) -> requests.Response:
+        """POST /api/v1/{resource}/search - Search records with filters."""
+        return requests.post(
+            f'{self._url}/{resource}/search',
+            json=search_params,
+            headers=self._headers(),
+            verify=False,
+            timeout=_TIMEOUT
+        )
+
+    def batch(self, resource: str, operations: list[dict[str, Any]]) -> requests.Response:
+        """POST /api/v1/{resource}/batch - Batch CRUD operations."""
+        return requests.post(
+            f'{self._url}/{resource}/batch',
+            json={'operations': operations},
+            headers=self._headers(),
+            verify=False,
+            timeout=_TIMEOUT
+        )
+
+
 class DNSClient:
     """Thin wrapper over the /dns/lookup HTTP backend."""
 
@@ -115,6 +197,30 @@ def w2ui(admin_url: str) -> W2UIClient:
 @pytest.fixture(scope='session')
 def dns(base_url: str) -> DNSClient:
     return DNSClient(base_url)
+
+
+@pytest.fixture(scope='session')
+def jwt_token(admin_url: str) -> str:
+    """Obtain JWT token via login endpoint for API v1 tests."""
+    login_url = f'{admin_url}/admin/login'
+    response = requests.post(
+        login_url,
+        json={'user': 'admin', 'password': 'admin'},
+        verify=False,
+        timeout=_TIMEOUT
+    )
+    assert response.status_code == 200, f'Login failed: {response.text}'
+    data = response.json()
+    assert data.get('status') == 'success', f"Login response status not 'success': {data}"
+    token = data.get('token')
+    assert token, f'No token in login response: {data}'
+    return token
+
+
+@pytest.fixture(scope='session')
+def api(admin_url: str, jwt_token: str) -> APIClient:
+    """REST API v1 client with JWT authentication."""
+    return APIClient(admin_url, jwt_token)
 
 
 @pytest.fixture
