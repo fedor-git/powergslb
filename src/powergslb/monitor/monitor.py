@@ -188,6 +188,11 @@ class MonitorManager(AbstractThread):
         for thread in to_stop:
             self._threads.pop(thread.content_id, None)
 
+        # Clear status for content ids being restarted (changed or dead checks) before starting new threads
+        # This ensures the new check thread starts with a clean slate.
+        for content_id in to_start:
+            self._status_registry.remove(content_id)
+
         for content_id, check in to_start.items():
             self._threads[content_id] = self._start_thread(content_id, check)
 

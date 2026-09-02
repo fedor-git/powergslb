@@ -14,9 +14,9 @@ class PowerDNSMixIn(abc.ABC):
         """Execute a result-set statement and return its rows as dicts."""
 
     def gslb_checks(self) -> list[dict[str, Any]]:
-        """Return every record's id, content and monitor for health checking.
+        """Return every enabled record's id, content and monitor for health checking.
 
-        :returns: One row per record with its id, content and monitor_json.
+        :returns: One row per enabled record with its id, content and monitor_json.
         """
         operation = """
             SELECT `records`.`id`,
@@ -24,6 +24,7 @@ class PowerDNSMixIn(abc.ABC):
               `monitors`.`monitor_json`
             FROM `records`
               JOIN `monitors` ON `records`.`monitor_id` = `monitors`.`id`
+            WHERE `records`.`disabled` = 0
         """
 
         return self.select(operation)
