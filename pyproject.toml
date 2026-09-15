@@ -22,6 +22,7 @@ dependencies = [
     "mysql-connector-python == 9.*",
     "netaddr == 1.*",
     "pyjwt == 2.*",
+    "redis == 8.*",
     # "systemd-python"  # C extension; requires gcc, python3-devel, systemd-devel; provided by system site-packages.
 ]
 

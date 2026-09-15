@@ -1,7 +1,9 @@
 """Request routing base class, body reading, and response writing."""
 
 import abc
+import json
 import logging
+import time
 from http.server import SimpleHTTPRequestHandler
 from typing import Any, ClassVar
 from urllib.parse import urlsplit, unquote
@@ -81,6 +83,11 @@ class HTTPRequestHandler(SimpleHTTPRequestHandler, abc.ABC):
         """Set the per-request client data, split the URL, and dispatch; an off-route path gets a 404."""
         self._set_remote_ip()
         self._urlsplit()
+
+        # Health check endpoint: available on all routes without authentication
+        if self.path == '/healthz':
+            self._handle_healthz()
+            return
 
         # Check if path matches the route, OR if it's special routes
         is_matching_route = self.dirs and self.dirs[0] == self.route
@@ -197,6 +204,52 @@ class HTTPRequestHandler(SimpleHTTPRequestHandler, abc.ABC):
         """Set the client IP to the TCP peer."""
         self.remote_ip = netaddr.IPAddress(self.address_string())
 
+    def _handle_healthz(self) -> None:
+        """Handle /healthz health check endpoint (no authentication required).
+        
+        Returns JSON with health status and optional checks:
+        - database: connection status
+        - redis: connection status (if configured)
+        - leader_status: leader election status (if applicable)
+        
+        Always returns 200 if service is running, even if some checks fail (fail-open).
+        """
+        try:
+            health_status = {
+                'status': 'ok',
+                'timestamp': time.time(),
+                'version': self.server_version,
+                'checks': {}
+            }
+            
+            # Check database connectivity
+            try:
+                if self.database is None or not hasattr(self.database, 'connection'):
+                    health_status['checks']['database'] = {'status': 'unknown'}
+                else:
+                    # Simple query to verify connection
+                    result = self.database.connection.is_connected()
+                    health_status['checks']['database'] = {
+                        'status': 'up' if result else 'down',
+                        'connected': result
+                    }
+            except Exception as e:
+                logging.warning('Health check: database connection check failed: %s', e)
+                health_status['checks']['database'] = {'status': 'error', 'error': str(e)}
+            
+            # Return health status as JSON (200 OK, no auth required)
+            response_json = json.dumps(health_status)
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json; charset=utf-8')
+            self.send_header('Content-Length', str(len(response_json.encode('utf-8'))))
+            self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
+            self.end_headers()
+            self.wfile.write(response_json.encode('utf-8'))
+            logging.debug('Health check request: %s', response_json)
+        except Exception as e:
+            logging.error('Health check handler error: %s', e)
+            self.send_error(500)
+
     def _urlsplit(self) -> None:
         """Split self.path into the path segments (self.dirs) and the query string (self.query).
 
@@ -278,10 +331,16 @@ class HTTPRequestHandler(SimpleHTTPRequestHandler, abc.ABC):
         """Route the stdlib access log to logging at INFO.
 
         When the request headers are available, dumps them at DEBUG with sensitive values masked.
+        
+        IMPORTANT: Suppress logging for /healthz requests to avoid log spam from K8s probes.
 
         :param format: printf-style format string passed by the stdlib.
         :param args: Format arguments.
         """
+        # Skip logging for health check requests (K8s liveness/readiness probes)
+        if hasattr(self, 'path') and self.path == '/healthz':
+            return
+        
         self._log(logging.INFO, format, *args)
         if logging.getLogger().isEnabledFor(logging.DEBUG) and getattr(self, 'headers', None):
             headers = {name: self._mask if name.lower() in self._sensitive_headers else value

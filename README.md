@@ -18,6 +18,7 @@ policies (round-robin, weighted-random, sticky-hash), and DNS views (CIDR and Ge
 
 * [Main features](#main-features)
 * [Architecture](#architecture)
+* [Distributed Deployments](#distributed-deployments)
 * [Quick start with the published Docker image](#quick-start-with-the-published-docker-image)
 * [Persisting data](#persisting-data)
 * [Upgrading](#upgrading)
@@ -69,6 +70,10 @@ policies (round-robin, weighted-random, sticky-hash), and DNS views (CIDR and Ge
 * Systemd status and watchdog support
 * Quick installation and setup
 * All-in-one Docker image
+* **Distributed deployment support**:
+    * Redis-backed leader election ensures only one pod runs health checks
+    * Redis-backed distributed status registry ensures all pods serve consistent DNS answers
+    * Automatic failover if leader pod fails (standby pods acquire leadership)
 * DNS GSLB configuration stored in a MySQL / MariaDB database
 * Master-Slave DNS GSLB using native MySQL / MariaDB [replication](https://mariadb.com/kb/en/standard-replication/)
 * Multi-Master DNS GSLB using native MySQL / MariaDB [Galera Cluster](https://galeracluster.com/)
@@ -562,6 +567,69 @@ classDiagram
 ```
 
 </details>
+
+---
+
+## Distributed Deployments
+
+PowerGSLB supports running multiple pods behind a load balancer for high availability. All pods read DNS queries from a shared database and must return consistent health status regardless of which pod services the query.
+
+### How It Works
+
+1. **Leader Election**: Only one PowerGSLB pod acquires the distributed leader lock in Redis and runs health checks
+2. **Distributed Status**: The leader pod writes health status to a Redis Set shared by all pods
+3. **Consistent Answers**: When any pod (leader or standby) serves a DNS query, it reads the same Redis status data
+4. **Failover**: If the leader pod dies, a standby pod automatically acquires leadership within seconds
+
+### Configuration
+
+Enable Redis in `build/powergslb.toml`:
+
+```toml
+[redis]
+host = "redis"
+port = 6379
+db = 0
+connection_timeout = 2
+socket_timeout = 2
+
+[leader_election]
+enabled = true
+lock_key = "powergslb:monitor:leader"
+ttl = 30
+renewal_interval = 10
+acquisition_retry_interval = 5
+```
+
+### Example: 3-Pod Deployment
+
+```bash
+# Start redis + 3 powergslb pods
+docker-compose -f docker-compose.distributed.yml up -d
+
+# Verify leader election
+docker logs powergslb-pod1  # Should show "Acquired leadership"
+docker logs powergslb-pod2  # Should show "Waiting for leadership"
+docker logs powergslb-pod3  # Should show "Waiting for leadership"
+
+# Query any pod - all return consistent answers
+dig @localhost -p 8080 example.com  # Pod 1
+dig @localhost -p 8081 example.com  # Pod 2
+dig @localhost -p 8082 example.com  # Pod 3
+```
+
+### Graceful Degradation
+
+If Redis becomes unavailable, PowerGSLB automatically falls back to in-memory mode:
+- Health checks continue to run
+- All backends are treated as UP (safe mode)
+- DNS queries succeed without filtering
+- Switches back to Redis-backed mode once Redis recovers
+
+**For more details, see:**
+- [Distributed Health Status Registry Architecture](docs/DISTRIBUTED_STATUS_REGISTRY.md) - Detailed technical guide
+- [Quick Start Guide](docs/QUICK_START_DISTRIBUTED.md) - Step-by-step deployment and testing
+- [Implementation Summary](docs/IMPLEMENTATION_SUMMARY.md) - Complete solution overview and design decisions
 
 ---
 

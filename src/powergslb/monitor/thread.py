@@ -23,15 +23,20 @@ class AbstractThread(threading.Thread, abc.ABC):
 
     def run(self) -> None:
         """Repeat task() every sleep_interval seconds until shutdown() is requested."""
-        logging.debug('thread started')
         try:
-            while not self.__shutdown_request.is_set():
-                self.task()
+            while not self._AbstractThread__shutdown_request.is_set():
+                try:
+                    self.task()
+                except Exception as e:  # pylint: disable=broad-exception-caught
+                    logging.exception('task() failed: %s', e)
+                    # Do NOT re-raise: long-running threads must survive task() errors
+                    # and retry at the next cycle.
                 # Interruptible sleep: shutdown() wakes it at once
-                self.__shutdown_request.wait(self.sleep_interval)
+                self._AbstractThread__shutdown_request.wait(self.sleep_interval)
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logging.exception('thread crashed: %s', e)
         finally:
-            logging.debug('thread stopped')
-            self.__stopped.set()
+            self._AbstractThread__stopped.set()
 
     def shutdown(self, timeout: float = 0) -> None:
         """Signal the thread to stop and wait up to timeout seconds for it to actually stop.
